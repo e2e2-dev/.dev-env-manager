@@ -7,11 +7,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/config.yaml"
 VARS_FILE="$SCRIPT_DIR/variables.env"
+ENV_LOCAL="$PROJECT_ROOT/.env.local"
 
 # Load variables from variables.env
 if [ -f "$VARS_FILE" ]; then
     set -a  # Auto-export variables
     source "$VARS_FILE"
+    set +a
+fi
+
+# Load secrets from .env.local (higher priority)
+if [ -f "$ENV_LOCAL" ]; then
+    set -a  # Auto-export variables
+    source "$ENV_LOCAL"
     set +a
 fi
 
