@@ -75,18 +75,27 @@ cd "$PROJECT_ROOT/.devenv"
 ln -sf scripts/devenv devenv
 chmod +x scripts/devenv 2>/dev/null || true
 
-# Download config template if config.yaml doesn't exist
-if [ ! -f "$PROJECT_ROOT/.devenv/config.yaml" ]; then
-    log_info "Creating config.yaml from template..."
+# Download config.yaml.example if it doesn't exist
+if [ ! -f "$PROJECT_ROOT/.devenv/config.yaml.example" ]; then
+    log_info "Creating config.yaml.example from template..."
     curl -sSL https://raw.githubusercontent.com/e2e2-dev/.dev-env-manager/main/templates/config.yaml.template \
-        -o "$PROJECT_ROOT/.devenv/config.yaml"
+        -o "$PROJECT_ROOT/.devenv/config.yaml.example"
+    log_success "config.yaml.example created!"
+else
+    log_info "config.yaml.example already exists, skipping"
+fi
+
+# Create config.yaml from example if it doesn't exist
+if [ ! -f "$PROJECT_ROOT/.devenv/config.yaml" ]; then
+    log_info "Creating config.yaml from config.yaml.example..."
+    cp "$PROJECT_ROOT/.devenv/config.yaml.example" "$PROJECT_ROOT/.devenv/config.yaml"
 
     log_success "config.yaml created!"
     log_warning "IMPORTANT: Edit .devenv/config.yaml and update:"
     echo "  - PROJECT_NAME"
     echo "  - WORKSPACE_PATH"
 else
-    log_info "config.yaml already exists, skipping template download"
+    log_info "config.yaml already exists, skipping"
 fi
 
 # Download .env.local template if it doesn't exist
@@ -110,9 +119,10 @@ if [ -f "$GITIGNORE" ]; then
         echo "" >> "$GITIGNORE"
         echo "# DevEnv Configuration Manager (synced via git subtree)" >> "$GITIGNORE"
         echo ".devenv/scripts/" >> "$GITIGNORE"
+        echo ".devenv/config.yaml" >> "$GITIGNORE"
         echo "" >> "$GITIGNORE"
-        echo "# Keep local configuration" >> "$GITIGNORE"
-        echo "!.devenv/config.yaml" >> "$GITIGNORE"
+        echo "# Keep templates and symlink" >> "$GITIGNORE"
+        echo "!.devenv/config.yaml.example" >> "$GITIGNORE"
         echo "!.devenv/devenv" >> "$GITIGNORE"
         log_success "Updated .gitignore"
     else
@@ -123,14 +133,18 @@ else
     cat > "$GITIGNORE" << 'EOF'
 # DevEnv Configuration Manager (synced via git subtree)
 .devenv/scripts/
+.devenv/config.yaml
 
 # Centralized configurations (synced from central repos)
 .devcontainer/
 .claude/
 .continue/
 
-# Keep local configuration
-!.devenv/config.yaml
+# Secrets (NEVER commit!)
+.env.local
+
+# Keep templates and symlink
+!.devenv/config.yaml.example
 !.devenv/devenv
 EOF
     log_success "Created .gitignore"
@@ -172,8 +186,11 @@ echo "2. Pull centralized configurations:"
 echo -e "   ${BLUE}./.devenv/devenv pull all${NC}"
 echo ""
 echo "3. Commit the changes:"
-echo -e "   ${BLUE}git add .devenv/ .gitignore${NC}"
+echo -e "   ${BLUE}git add .devenv/config.yaml.example .devenv/devenv .gitignore${NC}"
 echo -e "   ${BLUE}git commit -m 'feat: add devenv configuration manager'${NC}"
+echo ""
+echo -e "${YELLOW}Note:${NC} .devenv/config.yaml is gitignored (local only)"
+echo "      Only .devenv/config.yaml.example is tracked"
 echo ""
 echo -e "${BLUE}For help: ./.devenv/devenv --help${NC}"
 echo -e "${BLUE}For status: ./.devenv/devenv status${NC}"
