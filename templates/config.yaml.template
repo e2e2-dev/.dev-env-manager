@@ -1,0 +1,80 @@
+# DevEnv Configuration
+# Defines central repos, branches, and project-specific variables
+
+# Central repository sources (DO NOT MODIFY unless you know what you're doing)
+sources:
+  devcontainer:
+    repo: e2e2-dev/.dev-env-container
+    branch: main
+    target: .devcontainer
+
+  claude:
+    repo: e2e2-dev/.dev-env-claude
+    branch: main
+    target: .claude
+
+  continue:
+    repo: e2e2-dev/.dev-env-continue
+    branch: main
+    target: .continue
+
+# ============================================================================
+# PROJECT-SPECIFIC VARIABLES (EDIT THESE!)
+# ============================================================================
+
+# Project identity
+variables:
+  # TODO: Change to your project name (e.g., "my-awesome-app")
+  PROJECT_NAME: my-project-name
+
+  # TODO: Change to your workspace path (e.g., "/workspaces/my-awesome-app")
+  # This is where your project is mounted in the dev container
+  WORKSPACE_PATH: /workspaces/my-project-name
+
+  # Technology versions
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "22"
+
+  # AI models
+  CLAUDE_MODEL: claude-sonnet-4-5-20250929
+
+  # Optional: Custom paths (uncomment and configure if needed)
+  # OBSIDIAN_VAULT_PATH: /data/vaults/my-vault
+  # KNOWLEDGE_BASES_PATH: /data/knowledge-bases
+  # DATA_WORKSPACE_PATH: /data/workspaces
+
+# ============================================================================
+# VARIABLE SUBSTITUTION RULES (ADVANCED - usually no need to change)
+# ============================================================================
+
+# Defines which variables are substituted in which files
+substitutions:
+  - files:
+      - .devcontainer/devcontainer.json
+    variables:
+      - PROJECT_NAME
+      - WORKSPACE_PATH
+      - PYTHON_VERSION
+      - NODE_VERSION
+
+  - files:
+      - .devcontainer/docker-compose.yml
+    variables:
+      - PROJECT_NAME
+      - WORKSPACE_PATH
+      - OBSIDIAN_VAULT_PATH
+      - KNOWLEDGE_BASES_PATH
+      - DATA_WORKSPACE_PATH
+
+  - files:
+      - .claude/settings.local.json
+    variables:
+      - PROJECT_NAME
+      - WORKSPACE_PATH
+      - CLAUDE_MODEL
+
+  - files:
+      - .continue/config.json
+    variables:
+      - PROJECT_NAME
+      - WORKSPACE_PATH
