@@ -30,6 +30,16 @@ fi
 PROJECT_ROOT=$(git rev-parse --show-toplevel)
 log_info "Installing in: $PROJECT_ROOT"
 
+# Check for uncommitted changes
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    log_error "Working tree has uncommitted changes."
+    log_info "Please commit or stash your changes first:"
+    echo "   git status"
+    echo "   git add ."
+    echo "   git commit -m 'your message'"
+    exit 1
+fi
+
 # Check if .devenv already exists
 if [ -d "$PROJECT_ROOT/.devenv/scripts" ]; then
     log_warning ".devenv/scripts already exists"
