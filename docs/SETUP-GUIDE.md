@@ -14,21 +14,26 @@ Choose your scenario and follow the steps:
 # 1. Run the installer (one command)
 curl -sSL https://raw.githubusercontent.com/e2e2-dev/.dev-env-manager/main/install.sh | bash
 
-# 2. Edit configuration (2 variables)
+# 2. Edit configuration (2 required variables)
 vim .devenv/config.yaml
 # Update: PROJECT_NAME and WORKSPACE_PATH
 
-# 3. Pull configurations
+# 3. (Optional) Add API keys if needed
+vim .env.local
+# Uncomment and fill in any API keys you need:
+#   GEMINI_API_KEY, ANTHROPIC_API_KEY, GITHUB_TOKEN
+
+# 4. Pull configurations
 ./.devenv/devenv pull all
 
-# 4. Commit
+# 5. Commit
 git add .devenv/ .gitignore
 git commit -m "feat: add devenv configuration"
 
 # ✅ Done! Dev environment configured.
 ```
 
-**Time**: ~3 minutes
+**Time**: ~3 minutes (or ~4 minutes if adding API keys)
 
 ---
 
@@ -78,9 +83,11 @@ After setup, your project has:
 ```
 my-project/
 ├── .devenv/
-│   ├── config.yaml          # ← Your 2 variables (PROJECT_NAME, WORKSPACE_PATH)
+│   ├── config.yaml          # ← Project config (PROJECT_NAME, WORKSPACE_PATH, secrets list)
 │   ├── devenv              # ← CLI tool (symlink)
 │   └── scripts/            # ← Auto-synced via git subtree
+│
+├── .env.local              # ← Optional API keys (gitignored, commented template)
 │
 ├── .devcontainer/          # ← VS Code Dev Container config (auto-synced)
 ├── .claude/                # ← Claude Code AI config (auto-synced)
@@ -89,6 +96,7 @@ my-project/
 
 **Key Benefits:**
 - ✅ Consistent dev environment across all projects
+- ✅ Optional secrets management with commented templates
 - ✅ One-command updates when configs improve
 - ✅ Contribute improvements back easily
 - ✅ No manual script maintenance
@@ -282,7 +290,35 @@ curl -sSL https://raw.githubusercontent.com/e2e2-dev/.dev-env-manager/main/templ
 
 **Only if** `.devenv/config.yaml` doesn't exist.
 
-#### 6. Configure .gitignore
+#### 6. Download .env.local Template
+```bash
+curl -sSL https://raw.githubusercontent.com/e2e2-dev/.dev-env-manager/main/templates/.env.local.template \
+  -o .env.local
+```
+
+**Only if** `.env.local` doesn't exist.
+
+**What's in .env.local?**
+- All API keys commented out by default
+- Instructions on where to get each key
+- Uncomment only what you need
+
+**Example .env.local:**
+```bash
+# Google Gemini API Key
+# Get your key at: https://makersuite.google.com/app/apikey
+# GEMINI_API_KEY=your-gemini-api-key-here
+
+# Anthropic Claude API Key
+# Get your key at: https://console.anthropic.com/
+# ANTHROPIC_API_KEY=your-anthropic-api-key-here
+
+# GitHub Personal Access Token
+# Create one at: https://github.com/settings/tokens
+# GITHUB_TOKEN=your-github-token-here
+```
+
+#### 7. Configure .gitignore
 
 Adds these patterns:
 ```gitignore
@@ -294,6 +330,9 @@ Adds these patterns:
 .claude/
 .continue/
 
+# Secrets (NEVER commit!)
+.env.local
+
 # Keep local configuration
 !.devenv/config.yaml
 !.devenv/devenv
@@ -302,9 +341,10 @@ Adds these patterns:
 **Why these patterns?**
 - `.devenv/scripts/` managed by git subtree (not project git)
 - Configuration directories synced from central repos
-- Only `config.yaml` tracked in project repo
+- `.env.local` contains secrets (never commit!)
+- Only `config.yaml` and `devenv` symlink tracked in project repo
 
-#### 7. Install yq
+#### 8. Install yq
 
 ```bash
 # Check if yq exists
@@ -375,6 +415,19 @@ variables:
   # DATA_WORKSPACE_PATH: /data/workspaces
 
 # ============================================================================
+# SECRETS (NEVER COMMIT VALUES HERE!)
+# ============================================================================
+# Secrets are loaded from .env.local which is gitignored
+# Uncomment the secrets you need and add values to .env.local
+# The installer creates .env.local from .env.local.template
+
+# Optional secrets (uncomment if needed):
+secrets:
+  - GEMINI_API_KEY
+  - ANTHROPIC_API_KEY
+  - GITHUB_TOKEN
+
+# ============================================================================
 # VARIABLE SUBSTITUTION RULES (Advanced)
 # ============================================================================
 
@@ -410,7 +463,55 @@ substitutions:
     variables:
       - PROJECT_NAME
       - WORKSPACE_PATH
+
+  # Optional: Secrets substitution (uncomment if using secrets above)
+  # - files:
+  #     - .devcontainer/.env
+  #   variables:
+  #     - GEMINI_API_KEY
+  #     - ANTHROPIC_API_KEY
+  #     - GITHUB_TOKEN
 ```
+
+### Secrets Management
+
+**How it works:**
+
+1. **Declare secrets in config.yaml** (no values!)
+   ```yaml
+   secrets:
+     - GEMINI_API_KEY
+     - ANTHROPIC_API_KEY
+   ```
+
+2. **Store values in .env.local** (gitignored)
+   ```bash
+   # .env.local
+   GEMINI_API_KEY=your-actual-key-here
+   # ANTHROPIC_API_KEY=not-needed-yet
+   ```
+
+3. **Scripts auto-load from .env.local**
+   - `substitute-variables.sh` loads `.env.local`
+   - Secrets get substituted into configs
+   - `.env.local` never committed (gitignored)
+
+4. **Secrets substituted into .devcontainer/.env**
+   ```yaml
+   # In config.yaml substitutions:
+   - files:
+       - .devcontainer/.env
+     variables:
+       - GEMINI_API_KEY
+       - ANTHROPIC_API_KEY
+   ```
+
+**Security:**
+- ✅ `.env.local` is gitignored (never committed)
+- ✅ `config.yaml` only lists secret names (no values)
+- ✅ Template created with all secrets commented out
+- ✅ Developers uncomment only what they need
+- ✅ Each developer has their own `.env.local`
 
 ### Variable Naming Conventions
 
@@ -597,12 +698,26 @@ git subtree pull --prefix .devcontainer \
 
 Files now in `.devcontainer/` with placeholders intact.
 
-**Step 2: Read variables from config.yaml**
+**Step 2: Load variables and secrets**
+
+From `config.yaml`:
 ```bash
 # Using yq
 PROJECT_NAME=$(yq eval '.variables.PROJECT_NAME' .devenv/config.yaml)
 WORKSPACE_PATH=$(yq eval '.variables.WORKSPACE_PATH' .devenv/config.yaml)
 PYTHON_VERSION=$(yq eval '.variables.PYTHON_VERSION' .devenv/config.yaml)
+```
+
+From `.env.local` (if exists):
+```bash
+# Source .env.local to load secrets
+if [ -f .env.local ]; then
+  set -a  # Auto-export variables
+  source .env.local
+  set +a
+fi
+
+# Now $GEMINI_API_KEY, $ANTHROPIC_API_KEY, etc. are available
 ```
 
 **Step 3: Substitute in target files**
@@ -1066,19 +1181,22 @@ fi
 - ✅ One-command installer via curl
 - ✅ Git subtree-based script synchronization
 - ✅ Minimal `config.yaml` template (2 required variables)
+- ✅ Optional secrets management with `.env.local` template
 - ✅ Automatic yq installation
 - ✅ Auto-configured .gitignore
 
 **Improved:**
 - ✅ Made all `.claude/` configurations project-agnostic
 - ✅ Removed 117KB of project-specific content
-- ✅ Enhanced variable substitution system
+- ✅ Enhanced variable substitution system with secrets support
 - ✅ Fixed sync-push/pull bugs
+- ✅ All secrets commented out by default (opt-in pattern)
 
 **Removed:**
 - ❌ Manual script downloads (now via git subtree)
 - ❌ Complex config.yaml (now minimal template)
 - ❌ Project-specific documentation from central repos
+- ❌ Hardcoded API keys (now in gitignored .env.local)
 
 ---
 
