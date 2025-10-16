@@ -44,6 +44,23 @@ variables:
   # DATA_WORKSPACE_PATH: /data/workspaces
 
 # ============================================================================
+# SECRETS (NEVER COMMIT VALUES HERE!)
+# ============================================================================
+# Secrets are loaded from .env.local which is gitignored
+# Create .env.local in your project root with your actual API keys:
+#
+#   GEMINI_API_KEY=your-key-here
+#   ANTHROPIC_API_KEY=your-key-here
+#   GITHUB_TOKEN=your-token-here
+#
+# These will be substituted into .devcontainer/.env
+
+secrets:
+  - GEMINI_API_KEY
+  - ANTHROPIC_API_KEY
+  - GITHUB_TOKEN
+
+# ============================================================================
 # VARIABLE SUBSTITUTION RULES (ADVANCED - usually no need to change)
 # ============================================================================
 
@@ -78,3 +95,10 @@ substitutions:
     variables:
       - PROJECT_NAME
       - WORKSPACE_PATH
+
+  - files:
+      - .devcontainer/.env
+    variables:
+      - GEMINI_API_KEY
+      - ANTHROPIC_API_KEY
+      - GITHUB_TOKEN
