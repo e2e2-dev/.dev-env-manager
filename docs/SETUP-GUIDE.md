@@ -1,684 +1,1095 @@
-# Centralized Configuration Setup Guide
+# Centralized Development Environment Configuration
 
-**Step-by-step guide for setting up centralized development environment configuration across projects.**
-
-## Table of Contents
-1. [Overview](#overview)
-2. [Prerequisites](#prerequisites)
-3. [Initial Setup](#initial-setup)
-4. [Daily Usage](#daily-usage)
-5. [Making Changes](#making-changes)
-6. [Troubleshooting](#troubleshooting)
-7. [Advanced Topics](#advanced-topics)
+**Get your entire dev environment configured in under 5 minutes.**
 
 ---
 
-## Overview
+## 🚀 Quick Setup
 
-### What is Centralized Configuration?
+Choose your scenario and follow the steps:
 
-This system synchronizes common development environment configurations across all your Python projects:
+### For New Projects
 
-- **`.devcontainer/`** - VS Code Dev Container configuration
-- **`.claude/`** - Claude Code AI assistant configuration
-- **`.continue/`** - Continue.dev AI coding assistant configuration
+```bash
+# 1. Run the installer (one command)
+curl -sSL https://raw.githubusercontent.com/e2e2-dev/.dev-env-manager/main/install.sh | bash
 
-### How It Works
+# 2. Edit configuration (2 variables)
+vim .devenv/config.yaml
+# Update: PROJECT_NAME and WORKSPACE_PATH
+
+# 3. Pull configurations
+./.devenv/devenv pull all
+
+# 4. Commit
+git add .devenv/ .gitignore
+git commit -m "feat: add devenv configuration"
+
+# ✅ Done! Dev environment configured.
+```
+
+**Time**: ~3 minutes
+
+---
+
+### For Existing Projects
+
+```bash
+# 1. Run the installer (detects existing setup)
+curl -sSL https://raw.githubusercontent.com/e2e2-dev/.dev-env-manager/main/install.sh | bash
+
+# 2. Review/update configuration if needed
+vim .devenv/config.yaml
+
+# 3. Update configurations
+./.devenv/devenv pull all
+
+# 4. Commit changes
+git add .devenv/ .gitignore
+git commit -m "chore: update to centralized devenv manager"
+
+# ✅ Done! Now using centralized manager.
+```
+
+**Time**: ~2 minutes (if config already exists)
+
+---
+
+## 📋 Daily Commands
+
+```bash
+# Check what's synced and if updates available
+./.devenv/devenv status
+
+# Pull latest configurations
+./.devenv/devenv pull all              # All configs
+./.devenv/devenv pull claude           # Specific config
+
+# Push improvements to central repos
+./.devenv/devenv push claude           # Creates PR automatically
+```
+
+---
+
+## 🎯 What You Get
+
+After setup, your project has:
 
 ```
-Central GitHub Repositories          Your Project
-┌─────────────────────────┐         ┌──────────────────┐
-│ .dev-env-container      │ ──────> │ .devcontainer/   │
-│ .dev-env-claude         │ ──────> │ .claude/         │
-│ .dev-env-continue       │ ──────> │ .continue/       │
-└─────────────────────────┘         └──────────────────┘
-         (via git subtree)
+my-project/
+├── .devenv/
+│   ├── config.yaml          # ← Your 2 variables (PROJECT_NAME, WORKSPACE_PATH)
+│   ├── devenv              # ← CLI tool (symlink)
+│   └── scripts/            # ← Auto-synced via git subtree
+│
+├── .devcontainer/          # ← VS Code Dev Container config (auto-synced)
+├── .claude/                # ← Claude Code AI config (auto-synced)
+└── .continue/              # ← Continue.dev AI config (auto-synced)
 ```
 
 **Key Benefits:**
-- ✅ **Consistency**: All projects use same configuration
-- ✅ **Easy Updates**: Pull changes from central repos
-- ✅ **Project-Agnostic**: Generic configs work everywhere
-- ✅ **Version Control**: Changes tracked in central repos
+- ✅ Consistent dev environment across all projects
+- ✅ One-command updates when configs improve
+- ✅ Contribute improvements back easily
+- ✅ No manual script maintenance
 
 ---
 
-## Prerequisites
+## 🔧 Common Tasks
 
-### 1. Install Required Tools
-
-```bash
-# Install yq (YAML processor)
-mkdir -p ~/.local/bin
-wget -qO ~/.local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-chmod +x ~/.local/bin/yq
-
-# Add to PATH (add to ~/.bashrc or ~/.zshrc for persistence)
-export PATH="$HOME/.local/bin:$PATH"
-
-# Verify installation
-yq --version
-```
-
-### 2. Verify Git Configuration
+### Update Scripts
 
 ```bash
-# Check git is configured
-git config --global user.name
-git config --global user.email
-
-# If not configured, set them:
-git config --global user.name "Your Name"
-git config --global user.email "your.email@example.com"
+# Pull latest devenv scripts
+git subtree pull --prefix .devenv/scripts \
+  git@github.com:e2e2-dev/.dev-env-manager.git main --squash
 ```
 
-### 3. GitHub SSH Authentication
+### Add Custom Variables
 
-```bash
-# Test GitHub SSH access
-ssh -T git@github.com
-
-# Should see: "Hi username! You've successfully authenticated..."
-# If not, set up SSH keys: https://docs.github.com/en/authentication/connecting-to-github-with-ssh
-```
-
----
-
-## Initial Setup
-
-### Step 1: Create `.devenv/config.yaml`
-
-**Location**: `<your-project>/.devenv/config.yaml`
+Edit `.devenv/config.yaml`:
 
 ```yaml
-# Central repository sources
-sources:
-  devcontainer:
-    repo: "e2e2-dev/.dev-env-container"
-    branch: "main"
-    target: ".devcontainer"
-
-  claude:
-    repo: "e2e2-dev/.dev-env-claude"
-    branch: "main"
-    target: ".claude"
-
-  continue:
-    repo: "e2e2-dev/.dev-env-continue"
-    branch: "main"
-    target: ".continue"
-
-# Project-specific variables (non-secret)
 variables:
-  PROJECT_NAME: my-project-name              # ← Change this
-  WORKSPACE_PATH: /workspaces/my-project     # ← Change this
-  PYTHON_VERSION: "3.11"
-  NODE_VERSION: "22"
-  CLAUDE_MODEL: claude-sonnet-4-5-20250929
+  PROJECT_NAME: my-project
+  WORKSPACE_PATH: /workspaces/my-project
+
+  # Add your custom variables
+  DATABASE_PORT: "5432"
+  API_VERSION: "v2"
 ```
 
-**⚠️ IMPORTANT**: Update `PROJECT_NAME` and `WORKSPACE_PATH` to match your project!
+Then use in templates: `{{DATABASE_PORT}}`
 
-### Step 2: Download the `devenv` CLI Tool
+### Contribute Improvements
 
 ```bash
-# From your project root
-cd /path/to/your/project
+# 1. Edit config locally
+vim .claude/CLAUDE.md
 
-# Download the devenv script
-curl -o .devenv/devenv https://raw.githubusercontent.com/e2e2-dev/.dev-env-container/main/.devenv/devenv
-chmod +x .devenv/devenv
+# 2. Test changes
+# (rebuild container, test Claude, etc.)
 
-# Or if you already have it, ensure it's executable
-chmod +x .devenv/devenv
+# 3. Push to central repo
+./.devenv/devenv push claude
+
+# 4. Follow PR link shown
 ```
 
-### Step 3: Initial Pull (First Time Setup)
+---
 
+## 🆘 Quick Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| `yq: command not found` | Installer auto-installs it. If failed: `wget -qO ~/.local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && chmod +x ~/.local/bin/yq` |
+| Wrong workspace path | Edit `.devenv/config.yaml`, then `./.devenv/devenv pull all` |
+| Permission denied | Check SSH: `ssh -T git@github.com` |
+| Scripts out of date | `git subtree pull --prefix .devenv/scripts git@github.com:e2e2-dev/.dev-env-manager.git main --squash` |
+
+---
+
+## 📖 Need More Details?
+
+See sections below for in-depth explanations:
+- [How It Works](#how-it-works) - Architecture and design
+- [Installation Details](#installation-details) - What the installer does
+- [Configuration Reference](#configuration-reference) - All config options
+- [Git Subtree Internals](#git-subtree-internals) - How syncing works
+- [Variable Substitution](#variable-substitution) - Template system
+- [Contributing Back](#contributing-back) - Workflow for improvements
+- [Advanced Usage](#advanced-usage) - Power user features
+
+---
+
+# 📚 Complete Guide: Internals & Details
+
+## How It Works
+
+### Three-Tier Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Tier 1: Bootstrap (.dev-env-manager)                       │
+│                                                             │
+│  GitHub: e2e2-dev/.dev-env-manager                         │
+│  - install.sh (one-command installer)                      │
+│  - scripts/ (devenv CLI, sync-pull, sync-push, etc.)       │
+│  - templates/config.yaml.template                          │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+                    (git subtree pull)
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Tier 2: Project Configuration (.devenv/)                   │
+│                                                             │
+│  In your project: /path/to/my-project/.devenv/             │
+│  - config.yaml (PROJECT_NAME, WORKSPACE_PATH)              │
+│  - scripts/ (synced from .dev-env-manager)                 │
+│  - devenv (symlink to scripts/devenv)                      │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+                    (devenv pull all)
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Tier 3: Configurations (Central Repos)                     │
+│                                                             │
+│  e2e2-dev/.dev-env-container → .devcontainer/              │
+│  e2e2-dev/.dev-env-claude → .claude/                       │
+│  e2e2-dev/.dev-env-continue → .continue/                   │
+│                                                             │
+│  (Synced via git subtree with variable substitution)       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Why This Architecture?
+
+**Separation of Concerns:**
+1. **Bootstrap Layer** - Generic installer and scripts (one repo)
+2. **Project Layer** - Your project-specific variables (your repo)
+3. **Configuration Layer** - Reusable configs (three central repos)
+
+**Benefits:**
+- Scripts stay updated automatically (git subtree)
+- Configurations are project-agnostic (variable substitution)
+- Each project only stores 2 variables
+- Improvements propagate to all projects
+
+---
+
+## Installation Details
+
+### What `install.sh` Does
+
+When you run:
 ```bash
-# Pull all configurations from central repos
-.devenv/devenv pull all
-
-# This will:
-# 1. Clone .dev-env-container → .devcontainer/
-# 2. Clone .dev-env-claude → .claude/
-# 3. Clone .dev-env-continue → .continue/
-# 4. Apply variable substitutions (PROJECT_NAME, WORKSPACE_PATH, etc.)
+curl -sSL https://raw.githubusercontent.com/e2e2-dev/.dev-env-manager/main/install.sh | bash
 ```
 
-**Expected Output:**
-```
-📥 Pulling from central repositories...
-✅ Pulled devcontainer from e2e2-dev/.dev-env-container
-✅ Pulled claude from e2e2-dev/.dev-env-claude
-✅ Pulled continue from e2e2-dev/.dev-env-continue
-🔄 Applying variable substitutions...
-✅ Pull complete!
-```
+**Step-by-step execution:**
 
-### Step 4: Verify Setup
-
+#### 1. Verify Git Repository
 ```bash
-# Check synchronized directories exist
-ls -la .devcontainer/
-ls -la .claude/
-ls -la .continue/
-
-# Check status
-.devenv/devenv status
-
-# Should show:
-# 📦 devcontainer (synced from: e2e2-dev/.dev-env-container)
-# 📦 claude (synced from: e2e2-dev/.dev-env-claude)
-# 📦 continue (synced from: e2e2-dev/.dev-env-continue)
+# Checks you're in a git repo
+git rev-parse --git-dir
 ```
 
-### Step 5: Configure `.gitignore`
+#### 2. Create Directory Structure
+```bash
+mkdir -p .devenv
+```
 
-**Add to your project's `.gitignore`:**
+#### 3. Setup Scripts via Git Subtree
 
+**For new installation:**
+```bash
+git subtree add --prefix .devenv/scripts \
+  git@github.com:e2e2-dev/.dev-env-manager.git main --squash \
+  -m "chore: add devenv scripts from central repo"
+```
+
+**For existing installation:**
+```bash
+git subtree pull --prefix .devenv/scripts \
+  git@github.com:e2e2-dev/.dev-env-manager.git main --squash \
+  -m "chore: update devenv scripts from central repo"
+```
+
+**What this does:**
+- Adds all files from `.dev-env-manager/scripts/` to your `.devenv/scripts/`
+- Maintains git history linkage for future pulls
+- Uses `--squash` to keep your history clean
+
+#### 4. Create Symlink
+```bash
+cd .devenv
+ln -sf scripts/devenv devenv
+chmod +x devenv
+```
+
+**Why symlink?**
+- `.devenv/devenv` is what developers run
+- `scripts/devenv` is synced from central repo
+- Symlink connects them (no duplicate files)
+
+#### 5. Download Config Template
+```bash
+curl -sSL https://raw.githubusercontent.com/e2e2-dev/.dev-env-manager/main/templates/config.yaml.template \
+  -o .devenv/config.yaml
+```
+
+**Only if** `.devenv/config.yaml` doesn't exist.
+
+#### 6. Configure .gitignore
+
+Adds these patterns:
 ```gitignore
-# Centralized configurations (managed via git subtree)
+# DevEnv scripts (synced via git subtree)
+.devenv/scripts/
+
+# Configurations (synced from central repos)
 .devcontainer/
 .claude/
 .continue/
 
-# Keep .devenv configuration
-!.devenv/
+# Keep local configuration
+!.devenv/config.yaml
+!.devenv/devenv
 ```
 
-**Why?** These directories are managed via git subtree and synced from central repos, so we ignore them in the project's main git history.
+**Why these patterns?**
+- `.devenv/scripts/` managed by git subtree (not project git)
+- Configuration directories synced from central repos
+- Only `config.yaml` tracked in project repo
 
-### Step 6: Commit `.devenv/config.yaml`
+#### 7. Install yq
 
 ```bash
-# Commit the configuration (but not the synced directories)
-git add .devenv/config.yaml .devenv/devenv .gitignore
-git commit -m "feat: add centralized devenv configuration"
-git push origin main
+# Check if yq exists
+command -v yq
+
+# If not, install it
+mkdir -p ~/.local/bin
+curl -sSL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 \
+  -o ~/.local/bin/yq
+chmod +x ~/.local/bin/yq
+
+# Add to PATH
+export PATH="$HOME/.local/bin:$PATH"
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+```
+
+**What is yq?**
+- YAML processor (like `jq` for JSON)
+- Required for parsing `config.yaml`
+- Used by `devenv` CLI and helper scripts
+
+---
+
+## Configuration Reference
+
+### config.yaml Structure
+
+```yaml
+# ============================================================================
+# CENTRAL REPOSITORY SOURCES (Usually don't change)
+# ============================================================================
+
+sources:
+  devcontainer:
+    repo: e2e2-dev/.dev-env-container  # GitHub repo (org/name format)
+    branch: main                        # Branch to sync from
+    target: .devcontainer              # Where to sync in your project
+
+  claude:
+    repo: e2e2-dev/.dev-env-claude
+    branch: main
+    target: .claude
+
+  continue:
+    repo: e2e2-dev/.dev-env-continue
+    branch: main
+    target: .continue
+
+# ============================================================================
+# PROJECT-SPECIFIC VARIABLES (Edit these!)
+# ============================================================================
+
+variables:
+  # Required: Project identity
+  PROJECT_NAME: my-awesome-project      # Used in container name, configs
+  WORKSPACE_PATH: /workspaces/my-awesome-project  # Dev container mount path
+
+  # Required: Technology versions
+  PYTHON_VERSION: "3.11"                # Python version for dev container
+  NODE_VERSION: "22"                    # Node.js version
+
+  # Required: AI models
+  CLAUDE_MODEL: claude-sonnet-4-5-20250929  # Claude Code model
+
+  # Optional: Custom paths (uncomment if needed)
+  # OBSIDIAN_VAULT_PATH: /data/vaults/my-vault
+  # KNOWLEDGE_BASES_PATH: /data/knowledge-bases
+  # DATA_WORKSPACE_PATH: /data/workspaces
+
+# ============================================================================
+# VARIABLE SUBSTITUTION RULES (Advanced)
+# ============================================================================
+
+substitutions:
+  # Defines which variables get substituted in which files
+
+  - files:
+      - .devcontainer/devcontainer.json
+    variables:
+      - PROJECT_NAME
+      - WORKSPACE_PATH
+      - PYTHON_VERSION
+      - NODE_VERSION
+
+  - files:
+      - .devcontainer/docker-compose.yml
+    variables:
+      - PROJECT_NAME
+      - WORKSPACE_PATH
+      - OBSIDIAN_VAULT_PATH
+      - KNOWLEDGE_BASES_PATH
+      - DATA_WORKSPACE_PATH
+
+  - files:
+      - .claude/settings.local.json
+    variables:
+      - PROJECT_NAME
+      - WORKSPACE_PATH
+      - CLAUDE_MODEL
+
+  - files:
+      - .continue/config.json
+    variables:
+      - PROJECT_NAME
+      - WORKSPACE_PATH
+```
+
+### Variable Naming Conventions
+
+**Recommended patterns:**
+- `PROJECT_NAME`: lowercase-with-hyphens (e.g., `my-awesome-app`)
+- `WORKSPACE_PATH`: `/workspaces/{PROJECT_NAME}` (matches PROJECT_NAME)
+- Custom variables: UPPERCASE_WITH_UNDERSCORES
+
+**Examples:**
+```yaml
+# Good
+PROJECT_NAME: user-auth-service
+WORKSPACE_PATH: /workspaces/user-auth-service
+DATABASE_PORT: "5432"
+
+# Avoid
+PROJECT_NAME: UserAuthService      # Not lowercase
+WORKSPACE_PATH: /workspace/users   # Doesn't match PROJECT_NAME
+database_port: "5432"              # Not uppercase
 ```
 
 ---
 
-## Daily Usage
+## Git Subtree Internals
 
-### Checking Status
+### How Git Subtree Works
 
-```bash
-# See what's synced and from where
-.devenv/devenv status
-```
+Git subtree allows you to include one repository within another while maintaining independent histories.
 
-**Output Example:**
-```
-📦 devcontainer (synced from: e2e2-dev/.dev-env-container)
-   Target: .devcontainer
-   Status: ✅ Up to date
-   Last commit: abc1234 (2025-10-16)
-
-📦 claude (synced from: e2e2-dev/.dev-env-claude)
-   Target: .claude
-   Status: ⚠️  Updates available
-   Last commit: def5678 (2025-10-15)
-
-📦 continue (synced from: e2e2-dev/.dev-env-continue)
-   Target: .continue
-   Status: ✅ Up to date
-   Last commit: ghi9012 (2025-10-14)
-```
-
-### Pulling Updates
-
-When central repos are updated by other team members:
+#### Initial Add
 
 ```bash
-# Pull updates for all configurations
-.devenv/devenv pull all
-
-# Or pull specific configuration
-.devenv/devenv pull claude
-.devenv/devenv pull devcontainer
-.devenv/devenv pull continue
+git subtree add --prefix .devenv/scripts \
+  git@github.com:e2e2-dev/.dev-env-manager.git main --squash
 ```
 
-**When to pull:**
-- ✅ Start of each day
-- ✅ Before starting new features
-- ✅ After team updates central configs
-- ✅ When you see "Updates available" in status
+**What happens:**
+1. Git fetches the remote repository
+2. Creates a merge commit with all files from `main` branch
+3. Places files in `.devenv/scripts/` directory
+4. Uses `--squash` to create single commit (not full history)
+5. Stores subtree metadata in commit message
 
-### Applying Variable Substitutions
-
-After pulling, variables from `config.yaml` are automatically substituted:
-
-```yaml
-# In config.yaml
-variables:
-  PROJECT_NAME: my-awesome-project
-  WORKSPACE_PATH: /workspaces/my-awesome-project
+**Commit message includes:**
+```
+git-subtree-dir: .devenv/scripts
+git-subtree-split: abc123... (commit hash from source)
 ```
 
+#### Pulling Updates
+
+```bash
+git subtree pull --prefix .devenv/scripts \
+  git@github.com:e2e2-dev/.dev-env-manager.git main --squash
+```
+
+**What happens:**
+1. Fetches latest changes from remote
+2. Identifies last sync point from previous subtree metadata
+3. Merges changes into your `.devenv/scripts/`
+4. Creates merge commit with updated metadata
+
+#### Pushing Changes
+
+```bash
+git subtree push --prefix .devenv/scripts \
+  git@github.com:e2e2-dev/.dev-env-manager.git feature/my-improvement
+```
+
+**What happens:**
+1. Extracts commits that modified `.devenv/scripts/`
+2. Creates temporary branch with just those changes
+3. Pushes to specified branch in remote repo
+4. You then create PR in central repo
+
+### Why Subtree vs Submodule?
+
+| Feature | Git Subtree | Git Submodule |
+|---------|-------------|---------------|
+| **Simplicity** | ✅ Simple (just git commands) | ❌ Complex (extra .gitmodules) |
+| **Cloning** | ✅ Files included in clone | ❌ Requires `git submodule init` |
+| **Visibility** | ✅ Files visible in project | ❌ Pointer only |
+| **Merging** | ✅ Easy merges | ❌ Conflict-prone |
+| **History** | ⚠️ Can bloat (use --squash) | ✅ Separate history |
+
+**We chose subtree because:**
+- Developers don't need to know about subtrees
+- `git clone` just works (no extra steps)
+- Scripts are immediately visible/executable
+- `--squash` keeps history clean
+
+### Subtree States
+
+Your project can be in these states:
+
+**1. No Subtree**
+```bash
+# No .devenv/scripts/ directory exists
+# Not in git history
+```
+
+**2. Subtree Added**
+```bash
+# .devenv/scripts/ exists
+# Git knows it's a subtree (from commit metadata)
+```
+
+**3. Subtree Modified Locally**
+```bash
+# You edited files in .devenv/scripts/
+# Ready to push back to central repo
+```
+
+**4. Subtree Out of Sync**
+```bash
+# Central repo has updates
+# Need to pull to get latest
+```
+
+### Detecting Subtree Status
+
+The scripts check subtree state:
+
+```bash
+# Check if subtree exists in git history
+SUBTREE_IN_HISTORY=$(git log --all --grep="git-subtree-dir: .devenv/scripts" \
+  --pretty=format:"%H" | head -1)
+
+# Check if directory exists on disk
+if [ -d ".devenv/scripts" ]; then
+  SUBTREE_ON_DISK=true
+fi
+
+# Decision logic
+if [ -n "$SUBTREE_IN_HISTORY" ] && [ "$SUBTREE_ON_DISK" = true ]; then
+  # UPDATE: Use git subtree pull
+  git subtree pull --prefix .devenv/scripts ...
+elif [ -n "$SUBTREE_IN_HISTORY" ]; then
+  # RESTORE: Directory deleted, use git subtree add to restore
+  git subtree add --prefix .devenv/scripts ...
+else
+  # NEW: First time, use git subtree add
+  git subtree add --prefix .devenv/scripts ...
+fi
+```
+
+This handles edge cases like:
+- Directory manually deleted
+- Fresh clone
+- Corrupted state
+
+---
+
+## Variable Substitution
+
+### How Templates Work
+
+Central repositories contain files with `{{VARIABLE}}` placeholders:
+
+**Example: `.devcontainer/devcontainer.json`**
 ```json
-// In .devcontainer/devcontainer.json (after substitution)
 {
-  "name": "my-awesome-project",        // ← Replaced from {{PROJECT_NAME}}
-  "workspaceFolder": "/workspaces/my-awesome-project"  // ← Replaced from {{WORKSPACE_PATH}}
+  "name": "{{PROJECT_NAME}}",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "{{PROJECT_NAME}}",
+  "workspaceFolder": "{{WORKSPACE_PATH}}",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "{{PYTHON_VERSION}}"
+    }
+  }
 }
 ```
 
+### Substitution Process
+
+When you run `.devenv/devenv pull all`:
+
+**Step 1: Pull from central repo**
+```bash
+git subtree pull --prefix .devcontainer \
+  git@github.com:e2e2-dev/.dev-env-container.git main --squash
+```
+
+Files now in `.devcontainer/` with placeholders intact.
+
+**Step 2: Read variables from config.yaml**
+```bash
+# Using yq
+PROJECT_NAME=$(yq eval '.variables.PROJECT_NAME' .devenv/config.yaml)
+WORKSPACE_PATH=$(yq eval '.variables.WORKSPACE_PATH' .devenv/config.yaml)
+PYTHON_VERSION=$(yq eval '.variables.PYTHON_VERSION' .devenv/config.yaml)
+```
+
+**Step 3: Substitute in target files**
+
+For each file listed in `substitutions:`:
+```bash
+# For .devcontainer/devcontainer.json
+sed -i "s|{{PROJECT_NAME}}|${PROJECT_NAME}|g" .devcontainer/devcontainer.json
+sed -i "s|{{WORKSPACE_PATH}}|${WORKSPACE_PATH}|g" .devcontainer/devcontainer.json
+sed -i "s|{{PYTHON_VERSION}}|${PYTHON_VERSION}|g" .devcontainer/devcontainer.json
+```
+
+**Result:**
+```json
+{
+  "name": "my-awesome-project",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "my-awesome-project",
+  "workspaceFolder": "/workspaces/my-awesome-project",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11"
+    }
+  }
+}
+```
+
+### The substitute-variables.sh Script
+
+**Full implementation:**
+
+```bash
+#!/bin/bash
+# substitute-variables.sh - Replace {{VARIABLE}} placeholders
+
+set -e
+
+CONFIG_FILE="${1:-.devenv/config.yaml}"
+
+# Read all variables from config.yaml
+declare -A VARS
+
+while IFS= read -r line; do
+    # Parse YAML variables section
+    if [[ "$line" =~ ^[[:space:]]*([A-Z_]+):[[:space:]]*\"?([^\"]*)\"?$ ]]; then
+        var_name="${BASH_REMATCH[1]}"
+        var_value="${BASH_REMATCH[2]}"
+        VARS["$var_name"]="$var_value"
+    fi
+done < <(yq eval '.variables' "$CONFIG_FILE" -o=yaml)
+
+# For each substitution rule
+while IFS= read -r file; do
+    if [ -f "$file" ]; then
+        echo "Substituting variables in: $file"
+
+        # Replace each variable
+        for var_name in "${!VARS[@]}"; do
+            var_value="${VARS[$var_name]}"
+            sed -i "s|{{${var_name}}}|${var_value}|g" "$file"
+        done
+    fi
+done < <(yq eval '.substitutions[].files[]' "$CONFIG_FILE")
+```
+
+### Adding Custom Variables
+
+**1. Add variable to config.yaml:**
+```yaml
+variables:
+  PROJECT_NAME: my-app
+  WORKSPACE_PATH: /workspaces/my-app
+
+  # New custom variable
+  API_BASE_URL: https://api.myapp.com
+```
+
+**2. Add substitution rule:**
+```yaml
+substitutions:
+  - files:
+      - .devcontainer/devcontainer.json
+    variables:
+      - PROJECT_NAME
+      - WORKSPACE_PATH
+      - API_BASE_URL  # ← New
+```
+
+**3. Use in template:**
+
+In central repo's `.devcontainer/devcontainer.json`:
+```json
+{
+  "containerEnv": {
+    "API_BASE_URL": "{{API_BASE_URL}}"
+  }
+}
+```
+
+**4. Pull and substitute:**
+```bash
+./.devenv/devenv pull all
+```
+
+Result:
+```json
+{
+  "containerEnv": {
+    "API_BASE_URL": "https://api.myapp.com"
+  }
+}
+```
+
+### Substitution Gotchas
+
+**Issue: Variable not substituted**
+
+Check these:
+1. Variable defined in `config.yaml` variables section?
+2. Variable listed in appropriate `substitutions` rule?
+3. File path correct in `substitutions.files`?
+4. Template uses correct syntax: `{{VARIABLE}}` (not `${VARIABLE}`)?
+
+**Issue: Partial substitution**
+
+```json
+// Wrong - mixed template styles
+"path": "${PROJECT_NAME}/{{WORKSPACE_PATH}}"
+
+// Right - consistent template style
+"path": "{{PROJECT_NAME}}/{{WORKSPACE_PATH}}"
+```
+
+**Issue: Substitution in wrong files**
+
+Only files listed in `substitutions.files` get processed:
+```yaml
+substitutions:
+  - files:
+      - .devcontainer/devcontainer.json  # ✅ Processed
+      - .devcontainer/docker-compose.yml # ✅ Processed
+    variables:
+      - PROJECT_NAME
+
+# .devcontainer/Dockerfile NOT processed (not in list)
+```
+
 ---
 
-## Making Changes
+## Contributing Back
 
-### Workflow for Updating Central Configurations
+### Complete Workflow
 
-When you need to improve the shared configurations:
+#### 1. Make Local Changes
 
-#### Step 1: Edit Files Locally
+Edit configuration files in your project:
 
 ```bash
-# Edit configurations in your project
+# Example: Improve Claude configuration
 vim .claude/CLAUDE.md
-# or
-vim .devcontainer/devcontainer.json
+
+# Add new coding standards
+vim .claude/knowledge/standards/coding-standards.md
 ```
 
-#### Step 2: Test Changes
+#### 2. Test Thoroughly
+
+**For .devcontainer/ changes:**
+```bash
+# Rebuild container
+Dev Containers: Rebuild Container
+
+# Test all features work
+# - Extensions load
+# - Python version correct
+# - Tools available
+```
+
+**For .claude/ changes:**
+```bash
+# Test Claude commands
+/help
+/initiate test-scope
+
+# Verify new features
+# Check CLAUDE.md applies correctly
+```
+
+**For .continue/ changes:**
+```bash
+# Test Continue.dev
+# - Autocomplete works
+# - Chat works
+# - Configuration loads
+```
+
+#### 3. Review Changes
 
 ```bash
-# Test that changes work in your project
-# - Rebuild dev container if changed .devcontainer/
-# - Test Claude commands if changed .claude/
-# - Test Continue.dev if changed .continue/
+# See what you changed
+git diff .claude/
+
+# See which files changed
+git status .claude/
 ```
 
-#### Step 3: Push to Central Repository
+#### 4. Push to Central Repo
 
 ```bash
-# Push changes to central repo on a feature branch
-.devenv/devenv push claude
+# Push changes (interactive)
+./.devenv/devenv push claude
 
-# Interactive prompts will ask:
-# 1. Show you the changes
-# 2. Ask for confirmation
-# 3. Create a feature branch: feature/update-from-<project>-<timestamp>
-# 4. Push to central repository
+# Output shows:
+# - Changed files
+# - Line changes
+# - Feature branch name
+# - PR creation command
 ```
 
-**Example Session:**
+**Example output:**
 ```
 📤 Pushing changes to central repositories...
 
 ℹ Processing claude...
    Changes detected:
-     .claude/CLAUDE.md | 10 +++++-----
-     .claude/knowledge/development.md | 3 ++-
-     2 files changed, 7 insertions(+), 6 deletions(-)
+     .claude/CLAUDE.md | 15 +++++++++------
+     .claude/knowledge/standards/coding-standards.md | 25 ++++++++++++++++++++++
+     2 files changed, 34 insertions(+), 6 deletions(-)
 
    This will:
-   1. Create branch: feature/update-from-my-project-20251016-143022
+   1. Create branch: feature/update-from-my-project-20251016-230145
    2. Push changes to central repo
    3. Allow you to create a PR
 
    Continue? (y/N) y
 
-ℹ Pushing to feature/update-from-my-project-20251016-143022...
-✅ Pushed to branch: feature/update-from-my-project-20251016-143022
+ℹ Pushing to feature/update-from-my-project-20251016-230145...
+✅ Pushed to branch: feature/update-from-my-project-20251016-230145
 
    Create PR with:
    gh pr create --repo e2e2-dev/.dev-env-claude \
-     --head feature/update-from-my-project-20251016-143022 \
-     --title "feat: update from my-project" \
+     --head feature/update-from-my-project-20251016-230145 \
+     --title "feat: improve coding standards" \
      --fill
 ```
 
-#### Step 4: Create Pull Request
+#### 5. Create Pull Request
 
 ```bash
-# Create PR in central repository
+# Create PR with gh CLI
 gh pr create --repo e2e2-dev/.dev-env-claude \
-  --head feature/update-from-my-project-20251016-143022 \
-  --title "feat: improve Claude configuration" \
+  --head feature/update-from-my-project-20251016-230145 \
+  --title "feat: enhance coding standards and CLAUDE.md" \
   --body "## Changes
+
 - Enhanced CLAUDE.md with better examples
-- Updated knowledge files to be more generic
+- Added comprehensive coding standards
+- Fixed typos and improved clarity
 
 ## Testing
-- Tested in my-project
-- All Claude commands work correctly"
+
+- ✅ Tested in my-project
+- ✅ All Claude commands work correctly
+- ✅ New standards are clear and actionable
+
+## Impact
+
+- Improves developer experience
+- Provides clearer guidance
+- Makes configurations more useful"
 ```
 
-#### Step 5: Merge and Sync
+Or use GitHub web interface:
+1. Go to https://github.com/e2e2-dev/.dev-env-claude/pulls
+2. Click "New Pull Request"
+3. Select your branch: `feature/update-from-my-project-20251016-230145`
+4. Fill in title and description
+5. Create PR
 
-1. **Review PR** in central repository
-2. **Merge** once approved
-3. **Pull updates** in other projects:
+#### 6. Review and Merge
+
+**PR Review Checklist:**
+- [ ] Changes are generic (no project-specific content)
+- [ ] Variables use `{{VARIABLE}}` placeholders
+- [ ] Documentation updated if needed
+- [ ] No secrets or credentials
+- [ ] Tested in at least one project
+- [ ] Benefits multiple projects
+
+**After merge:**
+```bash
+# PR approved and merged to main
+```
+
+#### 7. Sync to Other Projects
 
 ```bash
 # In other projects
 cd /path/to/other-project
-.devenv/devenv pull claude
+./.devenv/devenv pull claude
+
+# Pulls latest including your improvements
 ```
 
-### Important Rules
+### Best Practices
 
-**✅ DO:**
-- Test changes thoroughly in your project first
-- Create descriptive PR titles and descriptions
-- Use feature branches (auto-created by `devenv push`)
-- Review changes before pushing
+**DO:**
+- ✅ Test changes thoroughly before pushing
+- ✅ Write clear PR descriptions
+- ✅ Explain why changes are beneficial
+- ✅ Use descriptive commit messages
+- ✅ Keep changes focused (one improvement per PR)
+- ✅ Update documentation if behavior changes
+- ✅ Use `{{VARIABLE}}` for project-specific values
 
-**❌ DON'T:**
-- Push directly to main branch
-- Include project-specific content in shared configs
-- Skip testing before pushing
-- Push secrets or credentials
+**DON'T:**
+- ❌ Push untested changes
+- ❌ Include project-specific content (hardcoded paths, names)
+- ❌ Push secrets or credentials
+- ❌ Make breaking changes without discussion
+- ❌ Push directly to main branch
+- ❌ Mix unrelated changes in one PR
+- ❌ Forget to pull before editing
 
 ---
 
-## Troubleshooting
+## Advanced Usage
 
-### Issue: `yq: command not found`
+### Custom Scripts
 
-**Solution:**
+Add project-specific scripts to `.devenv/`:
+
 ```bash
-# Install yq
-mkdir -p ~/.local/bin
-wget -qO ~/.local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-chmod +x ~/.local/bin/yq
+# .devenv/project-setup.sh
+#!/bin/bash
+# Custom setup for this project only
 
-# Add to PATH
-export PATH="$HOME/.local/bin:$PATH"
-
-# Make permanent (add to ~/.bashrc or ~/.zshrc)
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+echo "Running project-specific setup..."
+# Your custom logic here
 ```
 
-### Issue: `fatal: '.devcontainer' does not exist; use 'git subtree add'`
-
-**Cause:** Directory was removed from disk but git still thinks it's a subtree.
-
-**Solution:**
-```bash
-# The pull script automatically detects this and uses 'git subtree add'
-.devenv/devenv pull all
-
-# It checks both git history AND disk existence
-```
-
-### Issue: `No changes to push`
-
-**Cause:** Using `git diff` instead of `git diff HEAD` (only checks working tree, not staged changes).
-
-**Solution:** This was fixed in recent sync-push.sh updates. Update your devenv script:
-```bash
-curl -o .devenv/devenv https://raw.githubusercontent.com/e2e2-dev/.dev-env-container/main/.devenv/devenv
-chmod +x .devenv/devenv
-```
-
-### Issue: Container mounts wrong workspace path
-
-**Symptom:** Container shows `/workspaces/data-my-project` but config expects `/workspaces/my-project`
-
-**Solution:** Fix `WORKSPACE_PATH` in `.devenv/config.yaml`:
+**Call from config:**
 ```yaml
-variables:
-  PROJECT_NAME: my-project              # Must match
-  WORKSPACE_PATH: /workspaces/my-project  # Must match
+# In config.yaml (custom section)
+hooks:
+  post_pull: .devenv/project-setup.sh
 ```
 
-Then regenerate:
-```bash
-.devenv/devenv pull devcontainer
-```
+### Multiple Environments
 
-### Issue: Git subtree conflicts
-
-**Symptom:** Merge conflicts when pulling updates
-
-**Solution:**
-```bash
-# 1. Stash local changes
-git stash
-
-# 2. Pull fresh copy
-.devenv/devenv pull all
-
-# 3. Apply stash
-git stash pop
-
-# 4. Resolve conflicts manually if needed
-```
-
-### Issue: Permission denied when pushing
-
-**Symptom:** `Permission denied (publickey)` when running `devenv push`
-
-**Solution:**
-```bash
-# 1. Check SSH key is added to GitHub
-ssh -T git@github.com
-
-# 2. If needed, add SSH key
-ssh-add ~/.ssh/id_rsa  # or your key path
-
-# 3. Verify access to central repos
-git ls-remote git@github.com:e2e2-dev/.dev-env-claude.git
-```
-
----
-
-## Advanced Topics
-
-### Understanding Variable Substitution
-
-**In `config.yaml`:**
-```yaml
-variables:
-  PROJECT_NAME: awesome-app
-  WORKSPACE_PATH: /workspaces/awesome-app
-  PYTHON_VERSION: "3.11"
-```
-
-**In template files (before substitution):**
-```json
-{
-  "name": "{{PROJECT_NAME}}",
-  "workspaceFolder": "{{WORKSPACE_PATH}}",
-  "features": {
-    "python": "{{PYTHON_VERSION}}"
-  }
-}
-```
-
-**After substitution:**
-```json
-{
-  "name": "awesome-app",
-  "workspaceFolder": "/workspaces/awesome-app",
-  "features": {
-    "python": "3.11"
-  }
-}
-```
-
-The substitution script (`.devenv/substitute-variables.sh`) automatically:
-1. Reads variables from `config.yaml`
-2. Finds all `{{VARIABLE}}` placeholders
-3. Replaces them with actual values
-4. Creates final configuration files
-
-### Git Subtree Internals
-
-**How it works:**
-```bash
-# Initial add (first time)
-git subtree add --prefix .claude \
-  git@github.com:e2e2-dev/.dev-env-claude.git main --squash
-
-# Pull updates (subsequent times)
-git subtree pull --prefix .claude \
-  git@github.com:e2e2-dev/.dev-env-claude.git main --squash
-
-# Push changes
-git subtree push --prefix .claude \
-  git@github.com:e2e2-dev/.dev-env-claude.git feature-branch
-```
-
-**Why `--squash`?**
-- Keeps project history clean
-- Doesn't include every commit from central repo
-- Only includes the "snapshot" of configuration
-
-### Custom Variables
-
-Add project-specific variables in `config.yaml`:
+Different configs for different environments:
 
 ```yaml
+# .devenv/config.yaml
 variables:
   PROJECT_NAME: my-app
   WORKSPACE_PATH: /workspaces/my-app
-  PYTHON_VERSION: "3.11"
-  NODE_VERSION: "22"
 
-  # Custom variables
-  DATABASE_PORT: "5432"
-  REDIS_PORT: "6379"
-  API_VERSION: "v2"
+  # Environment-specific
+  ENVIRONMENT: development
+
+# .devenv/config.production.yaml
+variables:
+  PROJECT_NAME: my-app
+  WORKSPACE_PATH: /workspaces/my-app
+
+  # Environment-specific
+  ENVIRONMENT: production
 ```
 
-Then use in configuration files:
+Use different configs:
+```bash
+# Development (default)
+./.devenv/devenv pull all
+
+# Production
+CONFIG=.devenv/config.production.yaml ./.devenv/devenv pull all
+```
+
+### Conditional Substitutions
+
+Skip substitution for missing variables:
+
+```bash
+# In substitute-variables.sh, add:
+if [ -n "${var_value}" ]; then
+    sed -i "s|{{${var_name}}}|${var_value}|g" "$file"
+else
+    echo "Warning: Variable $var_name not set, skipping"
+fi
+```
+
+### Debugging
+
+Enable debug mode:
+
+```bash
+# Run devenv with debug output
+DEBUG=1 ./.devenv/devenv pull all
+
+# Or manually trace
+bash -x ./.devenv/devenv pull all
+```
+
+### Version Pinning
+
+Pin to specific commits instead of branches:
+
 ```yaml
-# In .devcontainer/devcontainer.json
-"forwardPorts": [
-  {{DATABASE_PORT}},
-  {{REDIS_PORT}}
-],
+sources:
+  claude:
+    repo: e2e2-dev/.dev-env-claude
+    branch: main
+    commit: abc123def456  # Pin to specific commit
+    target: .claude
 ```
 
-### Managing Multiple Projects
-
-**Best Practice Structure:**
-```
-~/projects/
-├── project-a/
-│   └── .devenv/
-│       ├── config.yaml  # PROJECT_NAME: project-a
-│       └── devenv
-├── project-b/
-│   └── .devenv/
-│       ├── config.yaml  # PROJECT_NAME: project-b
-│       └── devenv
-└── project-c/
-    └── .devenv/
-        ├── config.yaml  # PROJECT_NAME: project-c
-        └── devenv
-```
-
-Each project:
-- ✅ Has own `config.yaml` with unique PROJECT_NAME
-- ✅ Syncs from same central repositories
-- ✅ Applies project-specific variable substitutions
-- ✅ Can push improvements back to central repos
-
-### Updating the `devenv` Script Itself
-
-The `devenv` script can be updated:
-
+Modify sync-pull.sh to use commit hash:
 ```bash
-# Check for updates
-curl -s https://raw.githubusercontent.com/e2e2-dev/.dev-env-container/main/.devenv/devenv | diff - .devenv/devenv
-
-# Update if needed
-curl -o .devenv/devenv https://raw.githubusercontent.com/e2e2-dev/.dev-env-container/main/.devenv/devenv
-chmod +x .devenv/devenv
-
-# Commit update
-git add .devenv/devenv
-git commit -m "chore: update devenv script"
+if [ -n "$COMMIT" ]; then
+    git subtree pull --prefix "$TARGET" "$REPO_URL" "$COMMIT" --squash
+else
+    git subtree pull --prefix "$TARGET" "$REPO_URL" "$BRANCH" --squash
+fi
 ```
 
 ---
 
-## Summary: Quick Reference
+## Repository Links
 
-### Initial Setup (Once per project)
-```bash
-# 1. Install yq
-wget -qO ~/.local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-chmod +x ~/.local/bin/yq
+### Central Repositories
 
-# 2. Create config.yaml (customize PROJECT_NAME and WORKSPACE_PATH)
-# 3. Download devenv script
-# 4. Pull configurations
-.devenv/devenv pull all
+- 🚀 **Bootstrap**: https://github.com/e2e2-dev/.dev-env-manager
+  - Installation script
+  - CLI tools and helper scripts
+  - Configuration templates
 
-# 5. Update .gitignore
-# 6. Commit .devenv/config.yaml
-```
+- 📦 **Container**: https://github.com/e2e2-dev/.dev-env-container
+  - Dev Container configuration
+  - Dockerfile and docker-compose
+  - Container features
 
-### Daily Commands
-```bash
-# Check status
-.devenv/devenv status
+- 🤖 **Claude**: https://github.com/e2e2-dev/.dev-env-claude
+  - Claude Code configuration
+  - Workflow commands
+  - Knowledge base structure
 
-# Pull updates
-.devenv/devenv pull all
-
-# Push changes
-.devenv/devenv push claude
-```
-
-### Making Changes Workflow
-```bash
-# 1. Edit locally
-vim .claude/CLAUDE.md
-
-# 2. Test changes
-# 3. Push to central repo
-.devenv/devenv push claude
-
-# 4. Create PR
-gh pr create --repo e2e2-dev/.dev-env-claude --fill
-
-# 5. After merge, pull in other projects
-.devenv/devenv pull claude
-```
+- 🔄 **Continue**: https://github.com/e2e2-dev/.dev-env-continue
+  - Continue.dev configuration
+  - Model settings
+  - Prompt templates
 
 ---
 
-## Recent Improvements (2025-10-16)
+## Changelog
 
-### What Changed
-1. **✅ Removed project-specific content** from `.claude/` configuration:
-   - Deleted `ARCHITECTURE_REFERENCE.md` (Knowledge Builder specific)
-   - Removed 5 workflow documentation files (test results, enhancements)
-   - Total: ~117KB of project-specific content removed
+### 2025-10-16 - v1.0.0
 
-2. **✅ Made all `.claude/knowledge/` files project-agnostic**:
-   - Uses `{{WORKSPACE_PATH}}` placeholder instead of hardcoded paths
-   - Generic descriptions without project-specific references
-   - Deleted `dev-uat.md` (project-specific UAT scenarios)
+**Added:**
+- ✅ Centralized `.dev-env-manager` repository
+- ✅ One-command installer via curl
+- ✅ Git subtree-based script synchronization
+- ✅ Minimal `config.yaml` template (2 required variables)
+- ✅ Automatic yq installation
+- ✅ Auto-configured .gitignore
 
-3. **✅ Enhanced `.claude/CLAUDE.md`**:
-   - Generic Python project configuration
-   - Removed Knowledge Builder references
-   - Added comprehensive coding standards
+**Improved:**
+- ✅ Made all `.claude/` configurations project-agnostic
+- ✅ Removed 117KB of project-specific content
+- ✅ Enhanced variable substitution system
+- ✅ Fixed sync-push/pull bugs
 
-4. **✅ Fixed `sync-push.sh` and `sync-pull.sh`**:
-   - Now detects both staged and working tree changes
-   - Checks disk existence before subtree operations
-   - Improved yq parsing
-
-### What This Means for You
-- **Same configuration works across all Python projects**
-- **No manual customization needed** (just update `config.yaml`)
-- **Easier to contribute improvements** back to central repos
-- **Pull updates without conflicts** or project-specific content
+**Removed:**
+- ❌ Manual script downloads (now via git subtree)
+- ❌ Complex config.yaml (now minimal template)
+- ❌ Project-specific documentation from central repos
 
 ---
 
-**Questions or Issues?**
-- File issues: https://github.com/e2e2-dev/.dev-env-container/issues
-- Team documentation: Check central repos' README files
-- Quick help: `./devenv/devenv --help`
+## Support
+
+**Questions?**
+- 💬 Discussions: https://github.com/e2e2-dev/.dev-env-manager/discussions
+- 🐛 Issues: https://github.com/e2e2-dev/.dev-env-manager/issues
+- 📖 Docs: https://github.com/e2e2-dev/.dev-env-manager/blob/main/README.md
+
+**Quick Help:**
+```bash
+./.devenv/devenv --help
+```
