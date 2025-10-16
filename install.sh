@@ -63,7 +63,7 @@ fi
 log_info "Creating devenv CLI symlink..."
 cd "$PROJECT_ROOT/.devenv"
 ln -sf scripts/devenv devenv
-chmod +x devenv
+chmod +x scripts/devenv
 
 # Download config template if config.yaml doesn't exist
 if [ ! -f "$PROJECT_ROOT/.devenv/config.yaml" ]; then
