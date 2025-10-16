@@ -89,6 +89,17 @@ else
     log_info "config.yaml already exists, skipping template download"
 fi
 
+# Download .env.local template if it doesn't exist
+if [ ! -f "$PROJECT_ROOT/.env.local" ]; then
+    log_info "Creating .env.local from template..."
+    curl -sSL https://raw.githubusercontent.com/e2e2-dev/.dev-env-manager/main/templates/.env.local.template \
+        -o "$PROJECT_ROOT/.env.local"
+    log_success ".env.local created!"
+    log_info "Edit .env.local to add your API keys (optional)"
+else
+    log_info ".env.local already exists, skipping template download"
+fi
+
 # Update .gitignore
 log_info "Updating .gitignore..."
 GITIGNORE="$PROJECT_ROOT/.gitignore"

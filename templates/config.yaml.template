@@ -47,18 +47,14 @@ variables:
 # SECRETS (NEVER COMMIT VALUES HERE!)
 # ============================================================================
 # Secrets are loaded from .env.local which is gitignored
-# Create .env.local in your project root with your actual API keys:
-#
-#   GEMINI_API_KEY=your-key-here
-#   ANTHROPIC_API_KEY=your-key-here
-#   GITHUB_TOKEN=your-token-here
-#
-# These will be substituted into .devcontainer/.env
+# Uncomment the secrets you need and add values to .env.local
+# The installer will create .env.local from .env.local.template
 
-secrets:
-  - GEMINI_API_KEY
-  - ANTHROPIC_API_KEY
-  - GITHUB_TOKEN
+# Optional secrets (uncomment if needed):
+# secrets:
+#   - GEMINI_API_KEY
+#   - ANTHROPIC_API_KEY
+#   - GITHUB_TOKEN
 
 # ============================================================================
 # VARIABLE SUBSTITUTION RULES (ADVANCED - usually no need to change)
@@ -96,9 +92,10 @@ substitutions:
       - PROJECT_NAME
       - WORKSPACE_PATH
 
-  - files:
-      - .devcontainer/.env
-    variables:
-      - GEMINI_API_KEY
-      - ANTHROPIC_API_KEY
-      - GITHUB_TOKEN
+  # Optional: Secrets substitution (uncomment if using secrets above)
+  # - files:
+  #     - .devcontainer/.env
+  #   variables:
+  #     - GEMINI_API_KEY
+  #     - ANTHROPIC_API_KEY
+  #     - GITHUB_TOKEN
