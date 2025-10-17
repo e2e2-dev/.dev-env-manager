@@ -4,9 +4,10 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-CONFIG_FILE="$SCRIPT_DIR/config.yaml"
-VARS_FILE="$SCRIPT_DIR/variables.env"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+DEVENV_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+CONFIG_FILE="$DEVENV_DIR/config.yaml"
+VARS_FILE="$DEVENV_DIR/variables.env"
 ENV_LOCAL="$PROJECT_ROOT/.env.local"
 
 # Load variables from variables.env
