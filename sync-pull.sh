@@ -58,9 +58,27 @@ for source_name in $(yq eval '.sources | keys | .[]' "$CONFIG_FILE"); do
 done
 
 # Load variables for generation
+# First load from variables.env if it exists (legacy support)
 if [ -f "$SCRIPT_DIR/variables.env" ]; then
     set -a  # Auto-export variables
     source "$SCRIPT_DIR/variables.env"
+    set +a
+fi
+
+# Then load from config.yaml (takes precedence)
+if [ -f "$CONFIG_FILE" ]; then
+    log_info "Loading variables from config.yaml..."
+    for key in $(yq eval '.variables | keys | .[]' "$CONFIG_FILE" 2>/dev/null); do
+        VALUE=$(yq eval ".variables.$key" "$CONFIG_FILE")
+        export "$key=$VALUE"
+    done
+fi
+
+# Also load secrets from .env.local
+ENV_LOCAL="$PROJECT_ROOT/.env.local"
+if [ -f "$ENV_LOCAL" ]; then
+    set -a  # Auto-export variables
+    source "$ENV_LOCAL"
     set +a
 fi
 
@@ -84,12 +102,12 @@ if [ -f "$SCRIPT_DIR/substitute-variables.sh" ]; then
 fi
 
 # Generate .devcontainer/.env for Docker Compose
-if [ -f "$SCRIPT_DIR/variables.env" ] && ([ "$TARGET" = "all" ] || [ "$TARGET" = "devcontainer" ]); then
+if [ -f "$CONFIG_FILE" ] && ([ "$TARGET" = "all" ] || [ "$TARGET" = "devcontainer" ]); then
     log_info "Generating .devcontainer/.env for Docker Compose..."
 
     cat > "$PROJECT_ROOT/.devcontainer/.env" <<EOF
-# Generated from .devenv/variables.env - DO NOT EDIT MANUALLY
-# Edit .devenv/variables.env and run: .devenv/devenv pull devcontainer
+# Generated from .devenv/config.yaml - DO NOT EDIT MANUALLY
+# Edit .devenv/config.yaml and run: .devenv/devenv pull devcontainer
 
 OBSIDIAN_VAULT_PATH=${OBSIDIAN_VAULT_PATH}
 KNOWLEDGE_BASES_PATH=${KNOWLEDGE_BASES_PATH}
@@ -103,12 +121,12 @@ EOF
 fi
 
 # Generate .env.local for Continue.dev
-if [ -f "$SCRIPT_DIR/variables.env" ] && ([ "$TARGET" = "all" ] || [ "$TARGET" = "continue" ]); then
+if [ -f "$CONFIG_FILE" ] && ([ "$TARGET" = "all" ] || [ "$TARGET" = "continue" ]); then
     log_info "Generating .env.local for Continue.dev..."
 
     cat > "$PROJECT_ROOT/.env.local" <<EOF
-# Generated from .devenv/variables.env - DO NOT EDIT MANUALLY
-# Edit .devenv/variables.env and run: .devenv/devenv pull continue
+# Generated from .devenv/config.yaml and .env.local - DO NOT EDIT MANUALLY
+# Edit .devenv/config.yaml or .env.local and run: .devenv/devenv pull continue
 
 GEMINI_API_KEY=${GEMINI_API_KEY}
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
