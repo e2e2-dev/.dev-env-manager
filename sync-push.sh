@@ -27,24 +27,73 @@ if ! command -v yq &> /dev/null; then
     exit 1
 fi
 
-# Function to push via subtree
+# Function to push via direct file copy (works with gitignored directories)
 push_subtree() {
     local name=$1
     local repo=$2
-    local target=$3
+    local branch=$3
+    local target=$4
 
     log_info "Processing $name..."
 
     cd "$PROJECT_ROOT"
 
-    # Check if there are changes (both working tree and staged)
-    if git diff HEAD --quiet "$target" 2>/dev/null; then
+    # Check if directory exists
+    if [ ! -d "$PROJECT_ROOT/$target" ]; then
+        log_warning "Directory not found: $target"
+        return 0
+    fi
+
+    # Find last subtree pull commit hash
+    LAST_SUBTREE_COMMIT=$(git log --all --grep="git-subtree-dir: $target" --pretty=format:"%H" 2>/dev/null | head -1)
+
+    if [ -z "$LAST_SUBTREE_COMMIT" ]; then
+        log_warning "No subtree history found. Run 'devenv pull $name' first."
+        return 0
+    fi
+
+    # Extract the actual remote commit hash
+    REMOTE_COMMIT=$(git log -1 "$LAST_SUBTREE_COMMIT" --pretty=format:"%s" | grep -oP "commit \K[a-f0-9]+" || echo "")
+
+    if [ -z "$REMOTE_COMMIT" ]; then
+        log_warning "Cannot determine remote commit hash"
+        return 0
+    fi
+
+    # Create temp directory
+    TEMP_DIR=$(mktemp -d)
+    trap "rm -rf $TEMP_DIR" EXIT
+
+    # Clone remote repo
+    log_info "Cloning remote repository..."
+    if ! git clone -q "git@github.com:$repo.git" "$TEMP_DIR/remote" 2>/dev/null; then
+        log_warning "Failed to clone remote repository"
+        rm -rf "$TEMP_DIR"
+        return 0
+    fi
+
+    cd "$TEMP_DIR/remote"
+
+    # Checkout the commit we last pulled from (to create branch from there)
+    if ! git checkout -q "$REMOTE_COMMIT" 2>/dev/null; then
+        log_warning "Cannot checkout commit $REMOTE_COMMIT"
+        cd "$PROJECT_ROOT"
+        rm -rf "$TEMP_DIR"
+        return 0
+    fi
+
+    # Compare local files with remote to detect changes
+    LOCAL_CHANGES=$(diff -r -q "$PROJECT_ROOT/$target" "$TEMP_DIR/remote" 2>/dev/null | grep -v "^Only in $TEMP_DIR/remote" | wc -l || echo "0")
+
+    if [ "$LOCAL_CHANGES" -eq 0 ]; then
         log_success "No changes to push"
+        cd "$PROJECT_ROOT"
+        rm -rf "$TEMP_DIR"
         return 0
     fi
 
     echo "   Changes detected:"
-    git diff HEAD --stat "$target" 2>/dev/null | sed 's/^/     /'
+    diff -r -q "$PROJECT_ROOT/$target" "$TEMP_DIR/remote" 2>/dev/null | grep -v "^Only in $TEMP_DIR/remote" | sed 's/^/     /' || true
     echo ""
 
     # Create feature branch name
@@ -52,24 +101,58 @@ push_subtree() {
 
     echo "   This will:"
     echo "   1. Create branch: $BRANCH_NAME"
-    echo "   2. Push changes to central repo"
-    echo "   3. Allow you to create a PR"
+    echo "   2. Copy local files to remote repo"
+    echo "   3. Commit and push changes"
+    echo "   4. Allow you to create a PR"
     echo ""
 
     read -p "   Continue? (y/N) " -n 1 -r
     echo
     [[ ! $REPLY =~ ^[Yy]$ ]] && return 0
 
-    # Push to new branch via subtree
-    log_info "Pushing to $BRANCH_NAME..."
-    git subtree push --prefix "$target" "https://github.com/$repo.git" "$BRANCH_NAME"
+    # Create new branch
+    git checkout -b "$BRANCH_NAME" 2>/dev/null
 
-    echo ""
-    log_success "Pushed to branch: $BRANCH_NAME"
-    echo ""
-    echo "   Create PR with:"
-    echo "   gh pr create --repo $repo --head $BRANCH_NAME --title \"feat: update from $(basename "$PROJECT_ROOT")\" --fill"
-    echo ""
+    # Copy files from local to remote (excluding .git directory)
+    log_info "Copying local changes..."
+    rsync -av --delete --exclude='.git' "$PROJECT_ROOT/$target/" "$TEMP_DIR/remote/" > /dev/null
+
+    # Check if there are actual changes to commit
+    if git diff --quiet && git diff --cached --quiet; then
+        log_warning "No changes after file copy"
+        cd "$PROJECT_ROOT"
+        rm -rf "$TEMP_DIR"
+        return 0
+    fi
+
+    # Stage all changes
+    git add -A
+
+    # Create commit
+    COMMIT_MSG="feat: update from $(basename "$PROJECT_ROOT")
+
+Changes synchronized from local project.
+
+Updated files:
+$(git diff --cached --name-only | sed 's/^/- /')"
+
+    git commit -m "$COMMIT_MSG" 2>/dev/null
+
+    # Push to remote
+    log_info "Pushing to $BRANCH_NAME..."
+    if git push -u origin "$BRANCH_NAME" 2>&1; then
+        echo ""
+        log_success "Pushed to branch: $BRANCH_NAME"
+        echo ""
+        echo "   Create PR with:"
+        echo "   gh pr create --repo $repo --head $BRANCH_NAME --title \"feat: update from $(basename "$PROJECT_ROOT")\" --fill"
+        echo ""
+    else
+        log_warning "Push failed"
+    fi
+
+    cd "$PROJECT_ROOT"
+    rm -rf "$TEMP_DIR"
 }
 
 # Process each source
@@ -80,9 +163,10 @@ for source_name in $(yq eval '.sources | keys | .[]' "$CONFIG_FILE"); do
     fi
 
     REPO=$(yq eval ".sources.$source_name.repo" "$CONFIG_FILE")
+    BRANCH=$(yq eval ".sources.$source_name.branch // \"main\"" "$CONFIG_FILE")
     TARGET_DIR=$(yq eval ".sources.$source_name.target" "$CONFIG_FILE")
 
-    push_subtree "$source_name" "$REPO" "$TARGET_DIR"
+    push_subtree "$source_name" "$REPO" "$BRANCH" "$TARGET_DIR"
 done
 
 log_success "Push complete!"

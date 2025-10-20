@@ -58,6 +58,7 @@ cmd_status() {
     # Read sources from config.yaml
     for source_name in $(yq eval '.sources | keys | .[]' "$CONFIG_FILE"); do
         REPO=$(yq eval ".sources.$source_name.repo" "$CONFIG_FILE")
+        BRANCH=$(yq eval ".sources.$source_name.branch // \"main\"" "$CONFIG_FILE")
         TARGET=$(yq eval ".sources.$source_name.target" "$CONFIG_FILE")
 
         echo "📦 $source_name (synced from: $REPO)"
@@ -70,15 +71,82 @@ cmd_status() {
             continue
         fi
 
-        # Check for local modifications
-        cd "$PROJECT_ROOT"
-        if git diff --quiet "$TARGET" 2>/dev/null; then
-            log_success "No local changes"
-        else
-            echo "   Status: 📝 Local modifications"
-            git diff --stat "$TARGET" 2>/dev/null | sed 's/^/     /' || true
+        # Find last subtree pull commit hash from git history
+        LAST_SUBTREE_COMMIT=$(git log --all --grep="git-subtree-dir: $TARGET" --pretty=format:"%H" 2>/dev/null | head -1)
+
+        if [ -z "$LAST_SUBTREE_COMMIT" ]; then
+            log_warning "No subtree history found. Directory may not be properly synced."
+            echo ""
+            continue
         fi
 
+        # Extract the actual remote commit hash from the squashed commit message
+        REMOTE_COMMIT=$(git log -1 "$LAST_SUBTREE_COMMIT" --pretty=format:"%s" | grep -oP "commit \K[a-f0-9]+" || echo "")
+
+        if [ -z "$REMOTE_COMMIT" ]; then
+            log_warning "Cannot determine remote commit hash"
+            echo ""
+            continue
+        fi
+
+        # Create temp directory for comparison
+        TEMP_DIR=$(mktemp -d)
+        trap "rm -rf $TEMP_DIR" EXIT
+
+        # Clone remote repo (shallow)
+        log_info "Checking remote repository..."
+        if ! git clone --depth=50 -q "git@github.com:$REPO.git" "$TEMP_DIR/remote" 2>/dev/null; then
+            log_warning "Failed to clone remote repository"
+            rm -rf "$TEMP_DIR"
+            echo ""
+            continue
+        fi
+
+        cd "$TEMP_DIR/remote"
+
+        # Check if we have the commit we need
+        if ! git cat-file -e "$REMOTE_COMMIT" 2>/dev/null; then
+            # Try fetching more history
+            git fetch --depth=200 -q 2>/dev/null || true
+        fi
+
+        # Checkout the commit we last pulled
+        if git cat-file -e "$REMOTE_COMMIT" 2>/dev/null; then
+            git checkout -q "$REMOTE_COMMIT" 2>/dev/null
+        else
+            log_warning "Cannot find commit $REMOTE_COMMIT in remote repo"
+            cd "$PROJECT_ROOT"
+            rm -rf "$TEMP_DIR"
+            echo ""
+            continue
+        fi
+
+        # Compare local files with remote
+        cd "$PROJECT_ROOT"
+        LOCAL_CHANGES=$(diff -r -q "$PROJECT_ROOT/$TARGET" "$TEMP_DIR/remote" 2>/dev/null | grep -v "^Only in $TEMP_DIR/remote" | wc -l || echo "0")
+
+        if [ "$LOCAL_CHANGES" -gt 0 ]; then
+            echo "   Status: 📝 Local modifications detected"
+            diff -r -q "$PROJECT_ROOT/$TARGET" "$TEMP_DIR/remote" 2>/dev/null | grep -v "^Only in $TEMP_DIR/remote" | sed 's/^/     /' || true
+        else
+            log_success "No local changes"
+        fi
+
+        # Check for upstream changes
+        cd "$TEMP_DIR/remote"
+        git checkout -q "$BRANCH" 2>/dev/null
+        REMOTE_HEAD=$(git rev-parse HEAD)
+        REMOTE_COMMIT_FULL=$(git rev-parse "$REMOTE_COMMIT" 2>/dev/null || echo "$REMOTE_COMMIT")
+
+        if [ "$REMOTE_HEAD" != "$REMOTE_COMMIT_FULL" ]; then
+            echo "   Status: ⬆️  Upstream changes available"
+            echo "     Local:  $REMOTE_COMMIT_FULL"
+            echo "     Remote: $REMOTE_HEAD"
+            echo "     Run: devenv pull $source_name"
+        fi
+
+        cd "$PROJECT_ROOT"
+        rm -rf "$TEMP_DIR"
         echo ""
     done
 }
