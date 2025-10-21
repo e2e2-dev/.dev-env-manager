@@ -113,7 +113,7 @@ fi
 log_info "Updating .gitignore..."
 GITIGNORE="$PROJECT_ROOT/.gitignore"
 
-if [ -f "$GITIGNORE" ]; then
+if [ ! -f "$GITIGNORE" ]; then
     log_warning ".gitignore not found, creating one..."
     cat > "$GITIGNORE" << 'EOF'
 # =============================================================================
