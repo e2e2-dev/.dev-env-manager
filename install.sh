@@ -114,21 +114,6 @@ log_info "Updating .gitignore..."
 GITIGNORE="$PROJECT_ROOT/.gitignore"
 
 if [ -f "$GITIGNORE" ]; then
-    # Check if patterns already exist
-    if ! grep -q "^\.devenv/scripts/" "$GITIGNORE" 2>/dev/null; then
-        echo "" >> "$GITIGNORE"
-        echo "# DevEnv Configuration Manager (synced via git subtree)" >> "$GITIGNORE"
-        echo ".devenv/scripts/" >> "$GITIGNORE"
-        echo ".devenv/config.yaml" >> "$GITIGNORE"
-        echo "" >> "$GITIGNORE"
-        echo "# Keep templates and symlink" >> "$GITIGNORE"
-        echo "!.devenv/config.yaml.example" >> "$GITIGNORE"
-        echo "!.devenv/devenv" >> "$GITIGNORE"
-        log_success "Updated .gitignore"
-    else
-        log_info ".gitignore already configured"
-    fi
-else
     log_warning ".gitignore not found, creating one..."
     cat > "$GITIGNORE" << 'EOF'
 # =============================================================================
