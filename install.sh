@@ -131,21 +131,84 @@ if [ -f "$GITIGNORE" ]; then
 else
     log_warning ".gitignore not found, creating one..."
     cat > "$GITIGNORE" << 'EOF'
-# DevEnv Configuration Manager (synced via git subtree)
-.devenv/scripts/
-.devenv/config.yaml
+# =============================================================================
+# Python
+# =============================================================================
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.so
 
-# Centralized configurations (synced from central repos)
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+
+# Type checking & linting
+.mypy_cache/
+.ruff_cache/
+.pytype/
+
+# =============================================================================
+# Project-specific
+# =============================================================================
+# Project outputs
+/data/
+/temp/
+/logs/
+/tmp/
+/reports/
+/chroma/
+
+# =============================================================================
+# Development environment & AI assistants
+# =============================================================================
+# DevEnv: Everything managed by .dev-env-manager installer
+# https://github.com/e2e2-dev/.dev-env-manager
 .devcontainer/
 .claude/
 .continue/
+.devenv/
 
-# Secrets (NEVER commit!)
+# =============================================================================
+# Environment variables & secrets
+# =============================================================================
+# NEVER commit these files - they contain secrets!
 .env.local
+.env.dev
+.env.staging
+.env.prod
 
-# Keep templates and symlink
-!.devenv/config.yaml.example
-!.devenv/devenv
+# =============================================================================
+# IDE & Editor configurations
+# =============================================================================
+.vscode/
+.idea/
+.spyderproject
+.spyproject
+.ropeproject
+
+# AI-powered editors
+.abstra/
+.cursorignore
+.cursorindexingignore
+.amazonq/rules/
+!.amazonq/prompts/
+.VSCodeCounter/
 EOF
     log_success "Created .gitignore"
 fi
