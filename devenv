@@ -44,6 +44,32 @@ cmd_push() {
     "$SCRIPT_DIR/sync-push.sh" "$target"
 }
 
+# Command: scripts-status
+cmd_scripts_status() {
+    log_info "DevEnv scripts status:"
+    echo ""
+
+    cd "$PROJECT_ROOT"
+
+    # Check if there are local modifications
+    if git diff --quiet .devenv/scripts/ && git diff --cached --quiet .devenv/scripts/; then
+        log_success "No local modifications to DevEnv scripts"
+        echo ""
+        echo "To check for upstream updates: devenv self-update"
+    else
+        echo "   Status: 📝 Local modifications detected"
+        echo ""
+        git status --short .devenv/scripts/ | sed 's/^/     /'
+        echo ""
+        echo "To push your improvements:"
+        echo "  1. Review changes: git diff .devenv/scripts/"
+        echo "  2. Test thoroughly"
+        echo "  3. Push: devenv push devenv-scripts"
+        echo ""
+        echo "To discard changes: git restore .devenv/scripts/"
+    fi
+}
+
 # Command: status
 cmd_status() {
     log_info "Configuration sync status:"
@@ -57,6 +83,11 @@ cmd_status() {
 
     # Read sources from config.yaml
     for source_name in $(yq eval '.sources | keys | .[]' "$CONFIG_FILE"); do
+        # Skip devenv-scripts (use 'devenv scripts-status' instead)
+        if [ "$source_name" = "devenv-scripts" ]; then
+            continue
+        fi
+
         REPO=$(yq eval ".sources.$source_name.repo" "$CONFIG_FILE")
         BRANCH=$(yq eval ".sources.$source_name.branch // \"main\"" "$CONFIG_FILE")
         TARGET=$(yq eval ".sources.$source_name.target" "$CONFIG_FILE")
@@ -121,13 +152,25 @@ cmd_status() {
             continue
         fi
 
-        # Compare local files with remote
+        # Create restored directory with placeholders
+        mkdir -p "$TEMP_DIR/restored"
+
+        # Copy local files and restore placeholders
         cd "$PROJECT_ROOT"
-        LOCAL_CHANGES=$(diff -r -q "$PROJECT_ROOT/$TARGET" "$TEMP_DIR/remote" 2>/dev/null | grep -v "^Only in $TEMP_DIR/remote" | wc -l || echo "0")
+        if [ -d "$PROJECT_ROOT/$TARGET" ]; then
+            # Copy entire directory structure first
+            cp -r "$PROJECT_ROOT/$TARGET/"* "$TEMP_DIR/restored/" 2>/dev/null || true
+
+            # Restore placeholders using our script
+            "$SCRIPT_DIR/restore-placeholders.sh" "$TEMP_DIR/restored" "$TEMP_DIR/restored" "$source_name" 2>/dev/null || true
+        fi
+
+        # Compare restored local files (with placeholders) with remote (also with placeholders)
+        LOCAL_CHANGES=$(diff -r -q "$TEMP_DIR/restored" "$TEMP_DIR/remote" 2>/dev/null | grep -v "^Only in $TEMP_DIR/remote" | wc -l || echo "0")
 
         if [ "$LOCAL_CHANGES" -gt 0 ]; then
-            echo "   Status: 📝 Local modifications detected"
-            diff -r -q "$PROJECT_ROOT/$TARGET" "$TEMP_DIR/remote" 2>/dev/null | grep -v "^Only in $TEMP_DIR/remote" | sed 's/^/     /' || true
+            echo "   Status: 📝 Local modifications detected (comparing with placeholders restored)"
+            diff -r -q "$TEMP_DIR/restored" "$TEMP_DIR/remote" 2>/dev/null | grep -v "^Only in $TEMP_DIR/remote" | sed 's|'"$TEMP_DIR/restored"'|local|g' | sed 's|'"$TEMP_DIR/remote"'|remote|g' | sed 's/^/     /' || true
         else
             log_success "No local changes"
         fi
@@ -151,6 +194,65 @@ cmd_status() {
     done
 }
 
+# Command: self-update
+cmd_self_update() {
+    log_info "Updating DevEnv scripts from central repository..."
+    echo ""
+
+    cd "$PROJECT_ROOT"
+
+    # Check for uncommitted changes
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        log_error "Working tree has uncommitted changes"
+        echo ""
+        echo "Please commit or stash your changes before updating DevEnv scripts:"
+        echo "  git add ."
+        echo "  git commit -m 'Your changes'"
+        echo ""
+        echo "Or stash them temporarily:"
+        echo "  git stash"
+        echo "  devenv self-update"
+        echo "  git stash pop"
+        exit 1
+    fi
+
+    # Check if yq is available
+    if ! command -v yq &> /dev/null; then
+        log_error "yq is required but not installed. Install: https://github.com/mikefarah/yq"
+        exit 1
+    fi
+
+    # Get repo info from config
+    REPO=$(yq eval ".sources.devenv-scripts.repo" "$CONFIG_FILE")
+    BRANCH=$(yq eval ".sources.devenv-scripts.branch // \"main\"" "$CONFIG_FILE")
+
+    if [ -z "$REPO" ] || [ "$REPO" = "null" ]; then
+        log_error "devenv-scripts source not found in config.yaml"
+        echo "Please add devenv-scripts to your config.yaml sources"
+        exit 1
+    fi
+
+    log_info "Pulling from $REPO (branch: $BRANCH)..."
+
+    # Use git subtree pull to update scripts
+    if git subtree pull --prefix .devenv/scripts \
+        "git@github.com:$REPO.git" "$BRANCH" --squash; then
+        echo ""
+        log_success "DevEnv scripts updated successfully!"
+        echo ""
+        log_warning "If you have any active shells or sessions, please restart them to use the updated scripts."
+    else
+        echo ""
+        log_error "Failed to update DevEnv scripts"
+        echo ""
+        echo "Common issues:"
+        echo "  - Check your SSH keys are configured for GitHub"
+        echo "  - Verify the repository exists: $REPO"
+        echo "  - Try running manually: git subtree pull --prefix .devenv/scripts git@github.com:$REPO.git $BRANCH --squash"
+        exit 1
+    fi
+}
+
 # Command: help
 cmd_help() {
     cat <<EOF
@@ -162,15 +264,20 @@ Commands:
   pull [target]         Pull updates from central repos (default: all)
   push [target]         Push local changes to central repos (default: all)
   status                Show sync status
+  scripts-status        Check status of DevEnv scripts themselves
+  self-update           Pull DevEnv scripts updates from upstream
   help                  Show this help message
 
-Targets: devcontainer, claude, continue, all (default)
+Targets: devcontainer, claude, continue, devenv-scripts, all (default)
 
 Examples:
-  devenv pull              # Pull all configs
-  devenv pull claude       # Pull only .claude configs
-  devenv push claude       # Push .claude changes
-  devenv status            # Check sync status
+  devenv pull                    # Pull all configs
+  devenv pull claude             # Pull only .claude configs
+  devenv push claude             # Push .claude changes
+  devenv status                  # Check sync status
+  devenv scripts-status          # Check if DevEnv scripts were modified
+  devenv push devenv-scripts     # Push your DevEnv improvements upstream
+  devenv self-update             # Pull latest DevEnv scripts from upstream
 
 Configuration:
   Edit .devenv/config.yaml to configure repos and variables
@@ -192,6 +299,12 @@ case "${1:-help}" in
         ;;
     status)
         cmd_status
+        ;;
+    scripts-status)
+        cmd_scripts_status
+        ;;
+    self-update)
+        cmd_self_update
         ;;
     help|--help|-h)
         cmd_help
