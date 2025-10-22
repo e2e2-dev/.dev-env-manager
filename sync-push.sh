@@ -82,8 +82,21 @@ push_subtree() {
         return 0
     fi
 
-    # Compare local files with remote to detect changes
-    LOCAL_CHANGES=$(diff -r -q "$PROJECT_ROOT/$target" "$TEMP_DIR/remote" 2>/dev/null | grep -v "^Only in $TEMP_DIR/remote" | wc -l || echo "0")
+    # Create restored directory with placeholders
+    mkdir -p "$TEMP_DIR/restored"
+    log_info "Restoring placeholders in local files for comparison..."
+
+    # Copy local files and restore placeholders
+    if [ -d "$PROJECT_ROOT/$target" ]; then
+        # Copy entire directory structure first
+        cp -r "$PROJECT_ROOT/$target/"* "$TEMP_DIR/restored/" 2>/dev/null || true
+
+        # Restore placeholders using our script
+        "$SCRIPT_DIR/restore-placeholders.sh" "$TEMP_DIR/restored" "$TEMP_DIR/restored" "$name" 2>/dev/null || true
+    fi
+
+    # Compare restored local files (with placeholders) with remote (also with placeholders)
+    LOCAL_CHANGES=$(diff -r -q "$TEMP_DIR/restored" "$TEMP_DIR/remote" 2>/dev/null | grep -v "^Only in $TEMP_DIR/remote" | wc -l || echo "0")
 
     if [ "$LOCAL_CHANGES" -eq 0 ]; then
         log_success "No changes to push"
@@ -92,8 +105,8 @@ push_subtree() {
         return 0
     fi
 
-    echo "   Changes detected:"
-    diff -r -q "$PROJECT_ROOT/$target" "$TEMP_DIR/remote" 2>/dev/null | grep -v "^Only in $TEMP_DIR/remote" | sed 's/^/     /' || true
+    echo "   Changes detected (comparing files with placeholders restored):"
+    diff -r -q "$TEMP_DIR/restored" "$TEMP_DIR/remote" 2>/dev/null | grep -v "^Only in $TEMP_DIR/remote" | sed 's|'"$TEMP_DIR/restored"'|local|g' | sed 's|'"$TEMP_DIR/remote"'|remote|g' | sed 's/^/     /' || true
     echo ""
 
     # Create feature branch name
@@ -113,9 +126,9 @@ push_subtree() {
     # Create new branch
     git checkout -b "$BRANCH_NAME" 2>/dev/null
 
-    # Copy files from local to remote (excluding .git directory)
-    log_info "Copying local changes..."
-    rsync -av --delete --exclude='.git' "$PROJECT_ROOT/$target/" "$TEMP_DIR/remote/" > /dev/null
+    # Copy files from restored directory (with placeholders) to remote
+    log_info "Copying changes with placeholders restored..."
+    rsync -av --delete --exclude='.git' "$TEMP_DIR/restored/" "$TEMP_DIR/remote/" > /dev/null
 
     # Check if there are actual changes to commit
     if git diff --quiet && git diff --cached --quiet; then

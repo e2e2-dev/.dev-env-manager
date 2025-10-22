@@ -3,6 +3,11 @@
 
 # Central repository sources (DO NOT MODIFY unless you know what you're doing)
 sources:
+  devenv-scripts:
+    repo: e2e2-dev/.dev-env-manager
+    branch: main
+    target: .devenv/scripts
+
   devcontainer:
     repo: e2e2-dev/.dev-env-container
     branch: main
@@ -41,7 +46,6 @@ variables:
   # Optional: Custom paths (uncomment and configure if needed)
   # OBSIDIAN_VAULT_PATH: /data/vaults/my-vault
   # KNOWLEDGE_BASES_PATH: /data/knowledge-bases
-  # DATA_WORKSPACE_PATH: /data/workspaces
 
 # ============================================================================
 # SECRETS (NEVER COMMIT VALUES HERE!)
@@ -77,7 +81,6 @@ substitutions:
       - WORKSPACE_PATH
       - OBSIDIAN_VAULT_PATH
       - KNOWLEDGE_BASES_PATH
-      - DATA_WORKSPACE_PATH
 
   - files:
       - .claude/settings.local.json
