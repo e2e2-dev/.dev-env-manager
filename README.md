@@ -1,12 +1,12 @@
 # DevEnv Configuration Manager
 
-**Centralized development environment configuration management for all Python projects.**
+**Centralized development environment configuration management for all projects.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Overview
 
-DevEnv Manager provides a simple, centralized way to manage development environment configurations across multiple projects using git subtree.
+DevEnv Manager provides a simple, centralized way to manage development environment configurations across multiple projects. The manager scripts are synchronized via git subtree, while configurations are pulled directly from central repositories.
 
 ### What it manages:
 
@@ -20,7 +20,7 @@ DevEnv Manager provides a simple, centralized way to manage development environm
 ✅ **Minimal Configuration** - Only edit project-specific variables
 ✅ **Auto-Updates** - Pull latest configurations easily
 ✅ **Consistent Across Projects** - Same setup everywhere
-✅ **Version Controlled** - Track all changes via git
+✅ **Smart Syncing** - Scripts via git subtree, configs via direct sync
 
 ---
 
@@ -61,10 +61,12 @@ variables:
 ./.devenv/devenv pull all
 ```
 
-This pulls:
+This clones and syncs:
 - `.devcontainer/` from `e2e2-dev/.dev-env-container`
 - `.claude/` from `e2e2-dev/.dev-env-claude`
 - `.continue/` from `e2e2-dev/.dev-env-continue`
+
+Then automatically substitutes your project-specific variables.
 
 **Done!** 🎉 Your project now has centralized dev environment configuration.
 
@@ -111,18 +113,34 @@ Made improvements to shared configs?
 
 ```
 .dev-env-manager/
-├── README.md                      # This file
-├── install.sh                     # One-command installer
-├── scripts/
-│   ├── devenv                     # Main CLI tool
-│   ├── sync-pull.sh              # Pull from central repos
-│   ├── sync-push.sh              # Push to central repos
-│   └── substitute-variables.sh   # Variable substitution
+├── README.md                      # This file (Quick start & overview)
+├── VERSION                        # Version tracking
+├── LICENSE                        # MIT License
+│
+├── install.sh                     # One-command installer (bootstrap)
+│
+├── devenv                         # Main CLI tool
+├── sync-pull.sh                   # Pull configs from central repos
+├── sync-push.sh                   # Push improvements to central repos
+├── substitute-variables.sh        # Replace {{VARIABLES}} in configs
+├── restore-placeholders.sh        # Restore {{PLACEHOLDERS}} for comparison
+│
 ├── templates/
-│   └── config.yaml.template      # Configuration template
+│   ├── config.yaml.template       # Project configuration template
+│   └── .env.local.template        # Secrets template (all commented)
+│
 └── docs/
-    └── SETUP-GUIDE.md            # Detailed setup guide
+    └── SETUP-GUIDE.md             # Detailed setup & internals guide
 ```
+
+**Key Files:**
+
+- **`install.sh`** - Bootstrap installer run via curl, sets up `.devenv/` in projects
+- **`devenv`** - Main CLI with commands: pull, push, status, scripts-status, self-update
+- **`sync-pull.sh`** - Clones central repos, copies files, runs variable substitution
+- **`sync-push.sh`** - Compares local changes, restores placeholders, creates PRs
+- **`substitute-variables.sh`** - Replaces `{{VARIABLE}}` with actual values
+- **`restore-placeholders.sh`** - Reverse operation: replaces values with `{{VARIABLE}}`
 
 ---
 
@@ -133,24 +151,48 @@ Made improvements to shared configs?
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ Tier 1: MANAGER (.dev-env-manager)                         │
-│  - devenv CLI                                               │
-│  - Helper scripts (sync-pull, sync-push, substitute)        │
-│  - Documentation & templates                                │
+│  GitHub: e2e2-dev/.dev-env-manager                         │
+│  - devenv CLI & helper scripts                              │
+│  - install.sh (bootstrap installer)                         │
+│  - Templates (config.yaml, .env.local)                      │
 └─────────────────────────────────────────────────────────────┘
-                            ↓ (git subtree)
+                            ↓
+                  (git subtree to .devenv/scripts/)
+                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Tier 2: PROJECT (.devenv/config.yaml)                      │
-│  - Only project-specific variables                          │
-│  - Minimal configuration                                    │
+│ Tier 2: PROJECT LAYER (.devenv/)                           │
+│  In your project: my-project/.devenv/                       │
+│  - config.yaml (PROJECT_NAME, WORKSPACE_PATH, secrets)      │
+│  - scripts/ (synced via git subtree from manager)           │
+│  - devenv (symlink to scripts/devenv)                       │
 └─────────────────────────────────────────────────────────────┘
-                            ↓ (pulls via devenv CLI)
+                            ↓
+                  (clone, copy & substitute via devenv pull)
+                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Tier 3: CONFIGURATIONS                                      │
-│  - .dev-env-container → .devcontainer/                     │
-│  - .dev-env-claude → .claude/                              │
-│  - .dev-env-continue → .continue/                          │
+│ Tier 3: CONFIGURATIONS (Central Repos)                     │
+│  - e2e2-dev/.dev-env-container → .devcontainer/            │
+│  - e2e2-dev/.dev-env-claude → .claude/                     │
+│  - e2e2-dev/.dev-env-continue → .continue/                 │
+│                                                             │
+│  (Cloned, copied, and variables substituted)                │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### How Syncing Works
+
+**DevEnv Scripts (Tier 1 → Tier 2):**
+- Managed via **git subtree** for version tracking
+- Scripts live in `.devenv/scripts/` in your project
+- Update with `devenv self-update` or manual `git subtree pull`
+- Can push improvements back with `git subtree push`
+
+**Configurations (Tier 3 → Tier 2):**
+- Managed via **direct clone and copy** (not git subtree)
+- Shallow cloned to temp directory, .git removed, files copied
+- No git history mixing with your project
+- Variable substitution applied after copying
+- Push improvements via `devenv push <target>` (creates PR)
 
 ### Variable Substitution
 
@@ -169,6 +211,8 @@ Configuration templates use `{{VARIABLE}}` placeholders:
   "workspaceFolder": "/workspaces/my-awesome-project"
 }
 ```
+
+**Substitution happens automatically** when you run `devenv pull`.
 
 ---
 
@@ -196,26 +240,28 @@ my-project/
 
 ### .gitignore Pattern
 
-The installer adds:
+The installer configures:
 
 ```gitignore
-# DevEnv Configuration Manager (synced via git subtree)
-.devenv/scripts/
-
-# Centralized configurations (synced from central repos)
+# Development environment & AI assistants
+# DevEnv: Everything managed by .dev-env-manager installer
+# https://github.com/e2e2-dev/.dev-env-manager
 .devcontainer/
 .claude/
 .continue/
+.devenv/
 
-# Keep local configuration
-!.devenv/config.yaml
-!.devenv/devenv
+# Environment variables & secrets
+# NEVER commit these files - they contain secrets!
+.env.local
 ```
 
 This ensures:
-- ✅ Scripts are synced via git subtree (not duplicated)
-- ✅ Config stays in your project repo
-- ✅ Configurations are synced from central repos
+- ✅ **Scripts** in `.devenv/scripts/` managed via git subtree (tracked separately)
+- ✅ **Configurations** (`.devcontainer/`, `.claude/`, `.continue/`) pulled fresh each time
+- ✅ **Config files** (`.devenv/config.yaml`) are gitignored (local only)
+- ✅ **Config examples** (`.devenv/config.yaml.example`) can be tracked if desired
+- ✅ **Secrets** (`.env.local`) never committed
 
 ---
 
@@ -224,27 +270,37 @@ This ensures:
 ### Update DevEnv Manager scripts in your project
 
 ```bash
-# Pull latest scripts from .dev-env-manager
+# Use the built-in command (recommended)
+./.devenv/devenv self-update
+
+# Or manually via git subtree
 git subtree pull --prefix .devenv/scripts \
   git@github.com:e2e2-dev/.dev-env-manager.git main --squash
-
-# Or use convenience command (if implemented)
-./.devenv/devenv self-update
 ```
 
-### Contributing improvements
+The `self-update` command:
+- Checks for uncommitted changes (requires clean working tree)
+- Pulls latest scripts from central `.dev-env-manager` repo
+- Uses git subtree to maintain history linkage
+- Warns if you need to restart active shells
 
-1. Edit scripts locally in `.devenv/scripts/`
-2. Test in your project
-3. Push to central repo:
+### Contributing Script Improvements
 
-```bash
-git subtree push --prefix .devenv/scripts \
-  git@github.com:e2e2-dev/.dev-env-manager.git feature/my-improvement
-```
+When you improve the manager scripts themselves:
 
-4. Create PR in `.dev-env-manager` repo
-5. After merge, other projects can pull updates
+1. **Edit scripts** locally in `.devenv/scripts/`
+2. **Test thoroughly** in your project
+3. **Check status** to see what changed:
+   ```bash
+   ./.devenv/devenv scripts-status
+   ```
+4. **Push to central repo** using the devenv command:
+   ```bash
+   ./.devenv/devenv push devenv-scripts
+   ```
+   This creates a feature branch in `.dev-env-manager` repo
+5. **Create PR** in `.dev-env-manager` repository
+6. **After merge**, other projects can pull updates with `devenv self-update`
 
 ---
 
@@ -261,23 +317,60 @@ git subtree push --prefix .devenv/scripts \
 ### devenv CLI
 
 ```bash
-# Status
-./.devenv/devenv status               # Show sync status
+# Status & Information
+./.devenv/devenv status               # Show configuration sync status
+./.devenv/devenv scripts-status       # Show DevEnv scripts status
+./.devenv/devenv help                 # Show help message
 
-# Pull configurations
+# Pull configurations from central repos
 ./.devenv/devenv pull all             # Pull all configs
-./.devenv/devenv pull claude          # Pull specific config
-./.devenv/devenv pull devcontainer
+./.devenv/devenv pull devcontainer    # Pull specific config
+./.devenv/devenv pull claude
 ./.devenv/devenv pull continue
 
-# Push improvements
-./.devenv/devenv push claude          # Push changes to central repo
-./.devenv/devenv push devcontainer
+# Push improvements to central repos
+./.devenv/devenv push devcontainer    # Push changes (creates PR)
+./.devenv/devenv push claude
 ./.devenv/devenv push continue
+./.devenv/devenv push devenv-scripts  # Push script improvements
 
-# Help
-./.devenv/devenv --help               # Show help
+# Update DevEnv scripts
+./.devenv/devenv self-update          # Pull latest scripts from central repo
 ```
+
+### What Each Command Does
+
+**`status`** - Shows configuration sync status:
+- Checks each configuration directory (`.devcontainer/`, `.claude/`, `.continue/`)
+- Compares local files (with placeholders restored) against remote versions
+- Detects local modifications and upstream changes
+- Shows if pull is needed
+
+**`scripts-status`** - Shows DevEnv scripts status:
+- Checks if `.devenv/scripts/` has local modifications
+- Suggests `self-update` to check for upstream updates
+- Suggests `push devenv-scripts` if you made improvements
+
+**`pull [target]`** - Pulls configurations:
+- Clones central repo to temp directory (shallow clone)
+- Removes `.git` to avoid tracking conflicts
+- Copies files to target directory
+- Loads variables from `config.yaml` and `.env.local`
+- Substitutes `{{VARIABLES}}` in configuration files
+- Generates environment files (`.devcontainer/.env`, `.env.local`)
+
+**`push [target]`** - Pushes improvements:
+- Restores `{{PLACEHOLDERS}}` in your modified files
+- Clones central repo and compares changes
+- Creates feature branch with timestamp
+- Commits and pushes changes
+- Shows `gh pr create` command for creating PR
+
+**`self-update`** - Updates DevEnv scripts:
+- Checks for uncommitted changes (requires clean tree)
+- Reads devenv-scripts source from `config.yaml`
+- Pulls latest scripts using `git subtree pull`
+- Maintains git history linkage for future updates
 
 ---
 
@@ -301,16 +394,23 @@ chmod +x .devenv/scripts/*
 chmod +x .devenv/devenv
 ```
 
-### Git subtree errors
+### Git subtree errors (for scripts only)
 
-If you get subtree conflicts:
+Git subtree is only used for `.devenv/scripts/`. If you get subtree conflicts:
 
 ```bash
-# Remove and re-add
+# Check current state
+git log --all --grep="git-subtree-dir: .devenv/scripts" --oneline
+
+# If corrupted, remove and re-add
 rm -rf .devenv/scripts
+git add .devenv/scripts
+git commit -m "chore: remove corrupted subtree"
 git subtree add --prefix .devenv/scripts \
   git@github.com:e2e2-dev/.dev-env-manager.git main --squash
 ```
+
+**Note**: Configurations (`.devcontainer/`, `.claude/`, `.continue/`) don't use git subtree, so they won't have subtree conflicts.
 
 ---
 

@@ -1,6 +1,8 @@
-# Centralized Development Environment Configuration
+# DevEnv Configuration Manager - Complete Setup Guide
 
 **Get your entire dev environment configured in under 5 minutes.**
+
+This guide provides comprehensive documentation for developers using the DevEnv Configuration Manager.
 
 ---
 
@@ -83,23 +85,25 @@ After setup, your project has:
 ```
 my-project/
 ├── .devenv/
-│   ├── config.yaml          # ← Project config (PROJECT_NAME, WORKSPACE_PATH, secrets list)
-│   ├── devenv              # ← CLI tool (symlink)
-│   └── scripts/            # ← Auto-synced via git subtree
+│   ├── config.yaml          # ← Project config (PROJECT_NAME, WORKSPACE_PATH)
+│   ├── config.yaml.example  # ← Optional: Template for team (can be tracked)
+│   ├── devenv              # ← CLI tool (symlink to scripts/devenv)
+│   └── scripts/            # ← Synced via git subtree from .dev-env-manager
 │
-├── .env.local              # ← Optional API keys (gitignored, commented template)
+├── .env.local              # ← Optional API keys (gitignored, all commented by default)
 │
-├── .devcontainer/          # ← VS Code Dev Container config (auto-synced)
-├── .claude/                # ← Claude Code AI config (auto-synced)
-└── .continue/              # ← Continue.dev AI config (auto-synced)
+├── .devcontainer/          # ← Cloned from .dev-env-container, vars substituted
+├── .claude/                # ← Cloned from .dev-env-claude, vars substituted
+└── .continue/              # ← Cloned from .dev-env-continue, vars substituted
 ```
 
 **Key Benefits:**
 - ✅ Consistent dev environment across all projects
+- ✅ Scripts managed via git subtree (version tracked, easy updates)
+- ✅ Configurations synced via direct clone (no git history mixing)
 - ✅ Optional secrets management with commented templates
 - ✅ One-command updates when configs improve
 - ✅ Contribute improvements back easily
-- ✅ No manual script maintenance
 
 ---
 
@@ -108,7 +112,10 @@ my-project/
 ### Update Scripts
 
 ```bash
-# Pull latest devenv scripts
+# Use built-in command (recommended)
+./.devenv/devenv self-update
+
+# Or manually via git subtree
 git subtree pull --prefix .devenv/scripts \
   git@github.com:e2e2-dev/.dev-env-manager.git main --squash
 ```
@@ -153,7 +160,8 @@ vim .claude/CLAUDE.md
 | `yq: command not found` | Installer auto-installs it. If failed: `wget -qO ~/.local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && chmod +x ~/.local/bin/yq` |
 | Wrong workspace path | Edit `.devenv/config.yaml`, then `./.devenv/devenv pull all` |
 | Permission denied | Check SSH: `ssh -T git@github.com` |
-| Scripts out of date | `git subtree pull --prefix .devenv/scripts git@github.com:e2e2-dev/.dev-env-manager.git main --squash` |
+| Scripts out of date | `./.devenv/devenv self-update` or `git subtree pull --prefix .devenv/scripts git@github.com:e2e2-dev/.dev-env-manager.git main --squash` |
+| Configs not syncing | Run `./.devenv/devenv pull all` - configs are cloned fresh each time |
 
 ---
 
@@ -178,28 +186,29 @@ See sections below for in-depth explanations:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Tier 1: Bootstrap (.dev-env-manager)                       │
+│ Tier 1: Manager (.dev-env-manager)                         │
 │                                                             │
 │  GitHub: e2e2-dev/.dev-env-manager                         │
-│  - install.sh (one-command installer)                      │
+│  - install.sh (bootstrap installer via curl)               │
 │  - scripts/ (devenv CLI, sync-pull, sync-push, etc.)       │
-│  - templates/config.yaml.template                          │
+│  - templates/ (config.yaml, .env.local)                    │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
                             ↓
-                    (git subtree pull)
+                 (git subtree to .devenv/scripts/)
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Tier 2: Project Configuration (.devenv/)                   │
+│ Tier 2: Project Layer (.devenv/)                           │
 │                                                             │
 │  In your project: /path/to/my-project/.devenv/             │
-│  - config.yaml (PROJECT_NAME, WORKSPACE_PATH)              │
-│  - scripts/ (synced from .dev-env-manager)                 │
-│  - devenv (symlink to scripts/devenv)                      │
+│  - config.yaml (PROJECT_NAME, WORKSPACE_PATH, secrets)      │
+│  - config.yaml.example (optional team template)             │
+│  - scripts/ (synced via git subtree from manager)           │
+│  - devenv (symlink to scripts/devenv)                       │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
                             ↓
-                    (devenv pull all)
+              (clone, copy & substitute via devenv pull)
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
 │ Tier 3: Configurations (Central Repos)                     │
@@ -208,22 +217,29 @@ See sections below for in-depth explanations:
 │  e2e2-dev/.dev-env-claude → .claude/                       │
 │  e2e2-dev/.dev-env-continue → .continue/                   │
 │                                                             │
-│  (Synced via git subtree with variable substitution)       │
+│  (Cloned via shallow git clone, then variables substituted)│
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### Why This Architecture?
 
 **Separation of Concerns:**
-1. **Bootstrap Layer** - Generic installer and scripts (one repo)
-2. **Project Layer** - Your project-specific variables (your repo)
-3. **Configuration Layer** - Reusable configs (three central repos)
+1. **Manager Layer** - Generic installer and scripts (one repo, git subtree)
+2. **Project Layer** - Your project-specific variables (your repo, minimal config)
+3. **Configuration Layer** - Reusable configs (three central repos, direct clone)
 
 **Benefits:**
-- Scripts stay updated automatically (git subtree)
-- Configurations are project-agnostic (variable substitution)
-- Each project only stores 2 variables
-- Improvements propagate to all projects
+- ✅ Scripts version-tracked via git subtree (know which version you have)
+- ✅ Configurations pulled fresh each time (no git history mixing)
+- ✅ Configurations are project-agnostic (variable substitution)
+- ✅ Each project only stores minimal configuration
+- ✅ Improvements propagate to all projects
+- ✅ Simple to understand and debug
+
+**Why Two Different Sync Methods?**
+
+- **Scripts** (git subtree): Need version tracking, rarely change, no variables
+- **Configurations** (direct clone): Change frequently, need variable substitution, don't need history in your project
 
 ---
 
@@ -535,11 +551,13 @@ database_port: "5432"              # Not uppercase
 
 ---
 
-## Git Subtree Internals
+## Synchronization Internals
 
-### How Git Subtree Works
+The DevEnv Manager uses two different synchronization strategies:
 
-Git subtree allows you to include one repository within another while maintaining independent histories.
+### 1. Scripts Sync (Git Subtree)
+
+**Only `.devenv/scripts/` uses git subtree** for version tracking and bidirectional sync.
 
 #### Initial Add
 
@@ -561,9 +579,13 @@ git-subtree-dir: .devenv/scripts
 git-subtree-split: abc123... (commit hash from source)
 ```
 
-#### Pulling Updates
+#### Pulling Script Updates
 
 ```bash
+# Via devenv command (recommended)
+./.devenv/devenv self-update
+
+# Or manually
 git subtree pull --prefix .devenv/scripts \
   git@github.com:e2e2-dev/.dev-env-manager.git main --squash
 ```
@@ -574,9 +596,13 @@ git subtree pull --prefix .devenv/scripts \
 3. Merges changes into your `.devenv/scripts/`
 4. Creates merge commit with updated metadata
 
-#### Pushing Changes
+#### Pushing Script Improvements
 
 ```bash
+# Via devenv command
+./.devenv/devenv push devenv-scripts
+
+# Or manually
 git subtree push --prefix .devenv/scripts \
   git@github.com:e2e2-dev/.dev-env-manager.git feature/my-improvement
 ```
@@ -587,81 +613,107 @@ git subtree push --prefix .devenv/scripts \
 3. Pushes to specified branch in remote repo
 4. You then create PR in central repo
 
-### Why Subtree vs Submodule?
+### 2. Configuration Sync (Direct Clone & Copy)
 
-| Feature | Git Subtree | Git Submodule |
-|---------|-------------|---------------|
-| **Simplicity** | ✅ Simple (just git commands) | ❌ Complex (extra .gitmodules) |
-| **Cloning** | ✅ Files included in clone | ❌ Requires `git submodule init` |
-| **Visibility** | ✅ Files visible in project | ❌ Pointer only |
-| **Merging** | ✅ Easy merges | ❌ Conflict-prone |
-| **History** | ⚠️ Can bloat (use --squash) | ✅ Separate history |
+**Configurations (`.devcontainer/`, `.claude/`, `.continue/`) use direct cloning** - NOT git subtree.
 
-**We chose subtree because:**
-- Developers don't need to know about subtrees
-- `git clone` just works (no extra steps)
-- Scripts are immediately visible/executable
-- `--squash` keeps history clean
+#### Why Not Git Subtree for Configs?
 
-### Subtree States
+**Reasons for direct clone:**
+- ✅ **No git history mixing** - Your project history stays clean
+- ✅ **Simpler gitignore** - Just ignore the directories
+- ✅ **Faster syncing** - Shallow clone is quick
+- ✅ **No conflicts** - Fresh copy each time
+- ✅ **Variable substitution** - Files are modified after copying
 
-Your project can be in these states:
+**Downsides (acceptable trade-offs):**
+- ⚠️ No git tracking of config changes in your project
+- ⚠️ Must use `devenv push` to contribute back (can't use `git subtree push`)
 
-**1. No Subtree**
-```bash
-# No .devenv/scripts/ directory exists
-# Not in git history
-```
+#### How Configuration Pull Works
 
-**2. Subtree Added**
-```bash
-# .devenv/scripts/ exists
-# Git knows it's a subtree (from commit metadata)
-```
-
-**3. Subtree Modified Locally**
-```bash
-# You edited files in .devenv/scripts/
-# Ready to push back to central repo
-```
-
-**4. Subtree Out of Sync**
-```bash
-# Central repo has updates
-# Need to pull to get latest
-```
-
-### Detecting Subtree Status
-
-The scripts check subtree state:
+When you run `./.devenv/devenv pull devcontainer`:
 
 ```bash
-# Check if subtree exists in git history
-SUBTREE_IN_HISTORY=$(git log --all --grep="git-subtree-dir: .devenv/scripts" \
-  --pretty=format:"%H" | head -1)
+# 1. Create temp directory
+TEMP_DIR=$(mktemp -d)
 
-# Check if directory exists on disk
-if [ -d ".devenv/scripts" ]; then
-  SUBTREE_ON_DISK=true
-fi
+# 2. Shallow clone (depth=1, fast)
+git clone --depth 1 --branch main --single-branch \
+  git@github.com:e2e2-dev/.dev-env-container.git "$TEMP_DIR/devcontainer"
 
-# Decision logic
-if [ -n "$SUBTREE_IN_HISTORY" ] && [ "$SUBTREE_ON_DISK" = true ]; then
-  # UPDATE: Use git subtree pull
-  git subtree pull --prefix .devenv/scripts ...
-elif [ -n "$SUBTREE_IN_HISTORY" ]; then
-  # RESTORE: Directory deleted, use git subtree add to restore
-  git subtree add --prefix .devenv/scripts ...
-else
-  # NEW: First time, use git subtree add
-  git subtree add --prefix .devenv/scripts ...
-fi
+# 3. Remove .git to avoid tracking
+rm -rf "$TEMP_DIR/devcontainer/.git"
+
+# 4. Remove old target directory
+rm -rf .devcontainer
+
+# 5. Move files to target
+mv "$TEMP_DIR/devcontainer" .devcontainer
+
+# 6. Load variables and substitute
+source .env.local
+substitute-variables.sh  # Replaces {{VARIABLES}}
+
+# 7. Cleanup
+rm -rf "$TEMP_DIR"
 ```
 
-This handles edge cases like:
-- Directory manually deleted
-- Fresh clone
-- Corrupted state
+#### How Configuration Push Works
+
+When you run `./.devenv/devenv push claude`:
+
+```bash
+# 1. Clone remote repo
+git clone git@github.com:e2e2-dev/.dev-env-claude.git /tmp/remote
+
+# 2. Restore placeholders in local files
+restore-placeholders.sh .claude /tmp/restored
+# my-awesome-project → {{PROJECT_NAME}}
+# /workspaces/my-awesome-project → {{WORKSPACE_PATH}}
+
+# 3. Compare restored files with remote
+diff -r /tmp/restored /tmp/remote
+
+# 4. If changes exist, create feature branch
+cd /tmp/remote
+git checkout -b feature/update-from-my-project-20251023-120000
+
+# 5. Copy restored files (with placeholders) to remote
+rsync -av /tmp/restored/ /tmp/remote/
+
+# 6. Commit and push
+git add -A
+git commit -m "feat: update from my-project"
+git push origin feature/update-from-my-project-20251023-120000
+
+# 7. Show PR creation command
+echo "gh pr create --repo e2e2-dev/.dev-env-claude ..."
+```
+
+### Why Git Subtree for Scripts?
+
+| Feature | Git Subtree | Direct Clone |
+|---------|-------------|--------------|
+| **Simplicity** | ⚠️ More complex | ✅ Very simple |
+| **Cloning** | ✅ Files included | ❌ Need to pull after clone |
+| **Visibility** | ✅ Files visible | ✅ Files visible |
+| **History Tracking** | ✅ Tracked in git | ❌ Not tracked |
+| **Bidirectional** | ✅ Push/pull easily | ⚠️ Custom push logic |
+| **Version Control** | ✅ In your repo | ❌ Gitignored |
+
+**We use subtree for scripts because:**
+- Scripts need version tracking (know which version you have)
+- Scripts rarely change per-project (no variable substitution)
+- Important to track which script version introduced issues
+- Developers may improve scripts (bidirectional sync)
+
+**We use direct clone for configurations because:**
+- Configurations change frequently (new features, improvements)
+- Need variable substitution after copying
+- Don't want config history in your project
+- Simpler to reason about (just files in directories)
+- Faster to pull fresh configs
 
 ---
 
@@ -690,10 +742,18 @@ Central repositories contain files with `{{VARIABLE}}` placeholders:
 
 When you run `.devenv/devenv pull all`:
 
-**Step 1: Pull from central repo**
+**Step 1: Clone from central repo**
 ```bash
-git subtree pull --prefix .devcontainer \
-  git@github.com:e2e2-dev/.dev-env-container.git main --squash
+# Shallow clone to temp directory
+git clone --depth 1 --branch main --single-branch \
+  git@github.com:e2e2-dev/.dev-env-container.git /tmp/devcontainer
+
+# Remove .git to avoid tracking conflicts
+rm -rf /tmp/devcontainer/.git
+
+# Copy to target
+rm -rf .devcontainer
+mv /tmp/devcontainer .devcontainer
 ```
 
 Files now in `.devcontainer/` with placeholders intact.
@@ -747,7 +807,7 @@ sed -i "s|{{PYTHON_VERSION}}|${PYTHON_VERSION}|g" .devcontainer/devcontainer.jso
 
 ### The substitute-variables.sh Script
 
-**Full implementation:**
+**Core logic (simplified):**
 
 ```bash
 #!/bin/bash
@@ -755,33 +815,57 @@ sed -i "s|{{PYTHON_VERSION}}|${PYTHON_VERSION}|g" .devcontainer/devcontainer.jso
 
 set -e
 
-CONFIG_FILE="${1:-.devenv/config.yaml}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+CONFIG_FILE="$DEVENV_DIR/config.yaml"
 
-# Read all variables from config.yaml
-declare -A VARS
+# Load variables from config.yaml using yq
+for key in $(yq eval '.variables | keys | .[]' "$CONFIG_FILE"); do
+    VALUE=$(yq eval ".variables.$key" "$CONFIG_FILE")
+    export "$key=$VALUE"
+done
 
-while IFS= read -r line; do
-    # Parse YAML variables section
-    if [[ "$line" =~ ^[[:space:]]*([A-Z_]+):[[:space:]]*\"?([^\"]*)\"?$ ]]; then
-        var_name="${BASH_REMATCH[1]}"
-        var_value="${BASH_REMATCH[2]}"
-        VARS["$var_name"]="$var_value"
-    fi
-done < <(yq eval '.variables' "$CONFIG_FILE" -o=yaml)
+# Also load secrets from .env.local if it exists
+if [ -f "$PROJECT_ROOT/.env.local" ]; then
+    set -a  # Auto-export variables
+    source "$PROJECT_ROOT/.env.local"
+    set +a
+fi
 
-# For each substitution rule
-while IFS= read -r file; do
-    if [ -f "$file" ]; then
-        echo "Substituting variables in: $file"
+# Get number of substitution rules
+NUM_RULES=$(yq eval '.substitutions | length' "$CONFIG_FILE")
 
-        # Replace each variable
-        for var_name in "${!VARS[@]}"; do
-            var_value="${VARS[$var_name]}"
-            sed -i "s|{{${var_name}}}|${var_value}|g" "$file"
+# Process each substitution rule
+for ((i=0; i<$NUM_RULES; i++)); do
+    # Get files for this rule
+    for file in $(yq eval ".substitutions[$i].files[]" "$CONFIG_FILE"); do
+        FILE_PATH="$PROJECT_ROOT/$file"
+
+        if [ ! -f "$FILE_PATH" ]; then
+            continue
+        fi
+
+        echo "   📝 Processing $file"
+
+        # Get variables for this rule and replace each
+        for var in $(yq eval ".substitutions[$i].variables[]" "$CONFIG_FILE"); do
+            VALUE="${!var}"
+            if [ -n "$VALUE" ]; then
+                sed -i "s|{{${var}}}|${VALUE}|g" "$FILE_PATH"
+            fi
         done
-    fi
-done < <(yq eval '.substitutions[].files[]' "$CONFIG_FILE")
+    done
+done
+
+echo "✅ Variable substitution complete"
 ```
+
+**Key points:**
+- Loads variables from `config.yaml` using `yq`
+- Loads secrets from `.env.local` (gitignored)
+- Processes each substitution rule
+- Uses `sed` to replace `{{VARIABLE}}` with actual values
+- Only modifies files listed in `config.yaml`
 
 ### Adding Custom Variables
 
@@ -930,11 +1014,14 @@ git status .claude/
 # Push changes (interactive)
 ./.devenv/devenv push claude
 
-# Output shows:
-# - Changed files
-# - Line changes
-# - Feature branch name
-# - PR creation command
+# What happens:
+# 1. Restores {{PLACEHOLDERS}} in your files (my-project → {{PROJECT_NAME}})
+# 2. Clones central repo for comparison
+# 3. Shows you the changes
+# 4. Asks for confirmation
+# 5. Creates feature branch
+# 6. Commits and pushes
+# 7. Shows gh pr create command
 ```
 
 **Example output:**
@@ -942,27 +1029,32 @@ git status .claude/
 📤 Pushing changes to central repositories...
 
 ℹ Processing claude...
-   Changes detected:
-     .claude/CLAUDE.md | 15 +++++++++------
-     .claude/knowledge/standards/coding-standards.md | 25 ++++++++++++++++++++++
-     2 files changed, 34 insertions(+), 6 deletions(-)
+ℹ Cloning remote repository...
+ℹ Restoring placeholders in local files for comparison...
+   Changes detected (comparing files with placeholders restored):
+     Files .claude/CLAUDE.md differ
+     Files .claude/knowledge/standards/coding-standards.md differ
 
    This will:
-   1. Create branch: feature/update-from-my-project-20251016-230145
-   2. Push changes to central repo
-   3. Allow you to create a PR
+   1. Create branch: feature/update-from-my-project-20251023-120000
+   2. Copy local files to remote repo
+   3. Commit and push changes
+   4. Allow you to create a PR
 
    Continue? (y/N) y
 
-ℹ Pushing to feature/update-from-my-project-20251016-230145...
-✅ Pushed to branch: feature/update-from-my-project-20251016-230145
+ℹ Copying changes with placeholders restored...
+ℹ Pushing to feature/update-from-my-project-20251023-120000...
+✅ Pushed to branch: feature/update-from-my-project-20251023-120000
 
    Create PR with:
-   gh pr create --repo e2e2-dev/.dev-env-claude \
-     --head feature/update-from-my-project-20251016-230145 \
-     --title "feat: improve coding standards" \
-     --fill
+   gh pr create --repo e2e2-dev/.dev-env-claude --head feature/update-from-my-project-20251023-120000 --title "feat: update from my-project" --fill
 ```
+
+**Important:** The push process:
+1. **Restores placeholders** - Your project-specific values are replaced back to `{{VARIABLE}}`
+2. **Compares with remote** - Only files with actual changes (after placeholder restoration) are shown
+3. **Creates clean PR** - Remote repo gets generic templates, not your project-specific values
 
 #### 5. Create Pull Request
 
