@@ -6,7 +6,7 @@
 
 ## Overview
 
-DevEnv Manager provides a simple, centralized way to manage development environment configurations across multiple projects. The manager scripts are synchronized via git subtree, while configurations are pulled directly from central repositories.
+DevEnv Manager provides a simple, centralized way to manage development environment configurations across multiple projects. Manager scripts are downloaded fresh (like node_modules) and kept outside git tracking, while configurations are pulled directly from central repositories with variable substitution.
 
 ### What it manages:
 
@@ -20,7 +20,7 @@ DevEnv Manager provides a simple, centralized way to manage development environm
 ✅ **Minimal Configuration** - Only edit project-specific variables
 ✅ **Auto-Updates** - Pull latest configurations easily
 ✅ **Consistent Across Projects** - Same setup everywhere
-✅ **Smart Syncing** - Scripts via git subtree, configs via direct sync
+✅ **Smart Syncing** - Scripts downloaded fresh, configs cloned with variable substitution
 
 ---
 
@@ -37,9 +37,9 @@ curl -sSL https://raw.githubusercontent.com/e2e2-dev/.dev-env-manager/main/insta
 ```
 
 This will:
-- Set up `.devenv/scripts/` via git subtree
+- Download `.devenv/scripts/` from central repo (not tracked in git)
 - Create `.devenv/config.yaml` from template
-- Configure `.gitignore`
+- Configure `.gitignore` to exclude `.devenv/scripts/`
 - Install `yq` if needed
 
 #### 2. Edit your configuration
@@ -157,13 +157,14 @@ Made improvements to shared configs?
 │  - Templates (config.yaml, .env.local)                      │
 └─────────────────────────────────────────────────────────────┘
                             ↓
-                  (git subtree to .devenv/scripts/)
+                  (shallow clone to .devenv/scripts/)
+                  (NOT tracked in project git)
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
 │ Tier 2: PROJECT LAYER (.devenv/)                           │
 │  In your project: my-project/.devenv/                       │
 │  - config.yaml (PROJECT_NAME, WORKSPACE_PATH, secrets)      │
-│  - scripts/ (synced via git subtree from manager)           │
+│  - scripts/ (downloaded fresh, gitignored)                  │
 │  - devenv (symlink to scripts/devenv)                       │
 └─────────────────────────────────────────────────────────────┘
                             ↓
@@ -182,14 +183,15 @@ Made improvements to shared configs?
 ### How Syncing Works
 
 **DevEnv Scripts (Tier 1 → Tier 2):**
-- Managed via **git subtree** for version tracking
-- Scripts live in `.devenv/scripts/` in your project
-- Update with `devenv self-update` or manual `git subtree pull`
-- Can push improvements back with `git subtree push`
+- Downloaded via **shallow git clone** (not tracked in your project git)
+- Scripts live in `.devenv/scripts/` (gitignored, like `node_modules`)
+- Update with `devenv self-update` (downloads fresh copy)
+- VERSION file tracks which version you have
+- Push improvements via `devenv push devenv-scripts` (creates PR)
 
 **Configurations (Tier 3 → Tier 2):**
-- Managed via **direct clone and copy** (not git subtree)
-- Shallow cloned to temp directory, .git removed, files copied
+- Managed via **shallow clone and copy** (also not tracked in git)
+- Cloned to temp directory, .git removed, files copied
 - No git history mixing with your project
 - Variable substitution applied after copying
 - Push improvements via `devenv push <target>` (creates PR)
@@ -225,16 +227,17 @@ After installation, your project will have:
 ```
 my-project/
 ├── .devenv/
-│   ├── config.yaml          # ← Only file you edit
-│   ├── devenv              # ← Symlink to scripts/devenv
-│   └── scripts/            # ← Synced via git subtree
+│   ├── config.yaml          # ← Only file you edit (tracked in git)
+│   ├── config.yaml.example  # ← Template (tracked in git)
+│   ├── devenv              # ← Symlink to scripts/devenv (gitignored)
+│   └── scripts/            # ← Downloaded from central repo (gitignored)
 │       ├── devenv
 │       ├── sync-pull.sh
 │       ├── sync-push.sh
 │       └── substitute-variables.sh
-├── .devcontainer/          # ← Synced from .dev-env-container
-├── .claude/                # ← Synced from .dev-env-claude
-├── .continue/              # ← Synced from .dev-env-continue
+├── .devcontainer/          # ← Synced from .dev-env-container (gitignored)
+├── .claude/                # ← Synced from .dev-env-claude (gitignored)
+├── .continue/              # ← Synced from .dev-env-continue (gitignored)
 └── .gitignore             # ← Updated to ignore synced dirs
 ```
 
@@ -249,7 +252,9 @@ The installer configures:
 .devcontainer/
 .claude/
 .continue/
-.devenv/
+.devenv/scripts/     # Downloaded from central repo, not tracked in project
+.devenv/devenv       # Symlink to scripts/devenv
+.devenv/.env         # Generated from config.yaml
 
 # Environment variables & secrets
 # NEVER commit these files - they contain secrets!
@@ -257,9 +262,9 @@ The installer configures:
 ```
 
 This ensures:
-- ✅ **Scripts** in `.devenv/scripts/` managed via git subtree (tracked separately)
+- ✅ **Scripts** in `.devenv/scripts/` downloaded fresh (not tracked, like `node_modules`)
 - ✅ **Configurations** (`.devcontainer/`, `.claude/`, `.continue/`) pulled fresh each time
-- ✅ **Config files** (`.devenv/config.yaml`) are gitignored (local only)
+- ✅ **Config files** (`.devenv/config.yaml`) can be tracked or gitignored (your choice)
 - ✅ **Config examples** (`.devenv/config.yaml.example`) can be tracked if desired
 - ✅ **Secrets** (`.env.local`) never committed
 
@@ -270,19 +275,17 @@ This ensures:
 ### Update DevEnv Manager scripts in your project
 
 ```bash
-# Use the built-in command (recommended)
+# Use the built-in command
 ./.devenv/devenv self-update
-
-# Or manually via git subtree
-git subtree pull --prefix .devenv/scripts \
-  git@github.com:e2e2-dev/.dev-env-manager.git main --squash
 ```
 
 The `self-update` command:
-- Checks for uncommitted changes (requires clean working tree)
-- Pulls latest scripts from central `.dev-env-manager` repo
-- Uses git subtree to maintain history linkage
+- Downloads latest scripts from central `.dev-env-manager` repo
+- Replaces `.devenv/scripts/` with fresh copy
+- Updates VERSION file to track which version you have
 - Warns if you need to restart active shells
+
+**Note**: Since scripts are downloaded fresh (not tracked in git), you can safely delete `.devenv/scripts/` anytime and re-run the installer to get a clean copy.
 
 ### Contributing Script Improvements
 
@@ -367,10 +370,10 @@ When you improve the manager scripts themselves:
 - Shows `gh pr create` command for creating PR
 
 **`self-update`** - Updates DevEnv scripts:
-- Checks for uncommitted changes (requires clean tree)
 - Reads devenv-scripts source from `config.yaml`
-- Pulls latest scripts using `git subtree pull`
-- Maintains git history linkage for future updates
+- Downloads latest scripts via shallow clone
+- Replaces `.devenv/scripts/` with fresh copy
+- Updates VERSION file for version tracking
 
 ---
 
@@ -394,23 +397,22 @@ chmod +x .devenv/scripts/*
 chmod +x .devenv/devenv
 ```
 
-### Git subtree errors (for scripts only)
+### Scripts directory missing or corrupted
 
-Git subtree is only used for `.devenv/scripts/`. If you get subtree conflicts:
+Since `.devenv/scripts/` is downloaded fresh (not tracked in git), you can easily fix issues:
 
 ```bash
-# Check current state
-git log --all --grep="git-subtree-dir: .devenv/scripts" --oneline
-
-# If corrupted, remove and re-add
+# Delete the scripts directory
 rm -rf .devenv/scripts
-git add .devenv/scripts
-git commit -m "chore: remove corrupted subtree"
-git subtree add --prefix .devenv/scripts \
-  git@github.com:e2e2-dev/.dev-env-manager.git main --squash
+
+# Re-run the installer to download fresh copy
+curl -sSL https://raw.githubusercontent.com/e2e2-dev/.dev-env-manager/main/install.sh | bash
+
+# Or use self-update if devenv is still working
+./.devenv/devenv self-update
 ```
 
-**Note**: Configurations (`.devcontainer/`, `.claude/`, `.continue/`) don't use git subtree, so they won't have subtree conflicts.
+This is much simpler than the old git subtree approach!
 
 ---
 

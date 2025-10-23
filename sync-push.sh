@@ -44,19 +44,9 @@ push_subtree() {
         return 0
     fi
 
-    # Find last subtree pull commit hash
-    LAST_SUBTREE_COMMIT=$(git log --all --grep="git-subtree-dir: $target" --pretty=format:"%H" 2>/dev/null | head -1)
-
-    if [ -z "$LAST_SUBTREE_COMMIT" ]; then
-        log_warning "No subtree history found. Run 'devenv pull $name' first."
-        return 0
-    fi
-
-    # Extract the actual remote commit hash
-    REMOTE_COMMIT=$(git log -1 "$LAST_SUBTREE_COMMIT" --pretty=format:"%s" | grep -oP "commit \K[a-f0-9]+" || echo "")
-
-    if [ -z "$REMOTE_COMMIT" ]; then
-        log_warning "Cannot determine remote commit hash"
+    # Check if directory has VERSION file to determine it was properly pulled
+    if [ ! -f "$PROJECT_ROOT/$target/VERSION" ]; then
+        log_warning "No VERSION file found. Run 'devenv pull $name' first."
         return 0
     fi
 
@@ -74,9 +64,9 @@ push_subtree() {
 
     cd "$TEMP_DIR/remote"
 
-    # Checkout the commit we last pulled from (to create branch from there)
-    if ! git checkout -q "$REMOTE_COMMIT" 2>/dev/null; then
-        log_warning "Cannot checkout commit $REMOTE_COMMIT"
+    # Checkout the branch
+    if ! git checkout -q "$branch" 2>/dev/null; then
+        log_warning "Cannot checkout branch $branch"
         cd "$PROJECT_ROOT"
         rm -rf "$TEMP_DIR"
         return 0

@@ -102,90 +102,47 @@ cmd_status() {
             continue
         fi
 
-        # Find last subtree pull commit hash from git history
-        LAST_SUBTREE_COMMIT=$(git log --all --grep="git-subtree-dir: $TARGET" --pretty=format:"%H" 2>/dev/null | head -1)
-
-        if [ -z "$LAST_SUBTREE_COMMIT" ]; then
-            log_warning "No subtree history found. Directory may not be properly synced."
-            echo ""
-            continue
+        # Check local version file
+        LOCAL_VERSION=""
+        if [ -f "$PROJECT_ROOT/$TARGET/VERSION" ]; then
+            LOCAL_VERSION=$(cat "$PROJECT_ROOT/$TARGET/VERSION")
+            log_info "Local version: $LOCAL_VERSION"
+        else
+            log_warning "No VERSION file found. Cannot determine version."
         fi
 
-        # Extract the actual remote commit hash from the squashed commit message
-        REMOTE_COMMIT=$(git log -1 "$LAST_SUBTREE_COMMIT" --pretty=format:"%s" | grep -oP "commit \K[a-f0-9]+" || echo "")
-
-        if [ -z "$REMOTE_COMMIT" ]; then
-            log_warning "Cannot determine remote commit hash"
-            echo ""
-            continue
-        fi
-
-        # Create temp directory for comparison
+        # Create temp directory for checking remote version
         TEMP_DIR=$(mktemp -d)
         trap "rm -rf $TEMP_DIR" EXIT
 
         # Clone remote repo (shallow)
         log_info "Checking remote repository..."
-        if ! git clone --depth=50 -q "git@github.com:$REPO.git" "$TEMP_DIR/remote" 2>/dev/null; then
+        if ! git clone --depth 1 --branch "$BRANCH" -q "git@github.com:$REPO.git" "$TEMP_DIR/remote" 2>/dev/null; then
             log_warning "Failed to clone remote repository"
             rm -rf "$TEMP_DIR"
             echo ""
             continue
         fi
 
-        cd "$TEMP_DIR/remote"
-
-        # Check if we have the commit we need
-        if ! git cat-file -e "$REMOTE_COMMIT" 2>/dev/null; then
-            # Try fetching more history
-            git fetch --depth=200 -q 2>/dev/null || true
+        # Check remote version
+        REMOTE_VERSION=""
+        if [ -f "$TEMP_DIR/remote/VERSION" ]; then
+            REMOTE_VERSION=$(cat "$TEMP_DIR/remote/VERSION")
+            log_info "Remote version: $REMOTE_VERSION"
         fi
 
-        # Checkout the commit we last pulled
-        if git cat-file -e "$REMOTE_COMMIT" 2>/dev/null; then
-            git checkout -q "$REMOTE_COMMIT" 2>/dev/null
+        # Compare versions
+        if [ -n "$LOCAL_VERSION" ] && [ -n "$REMOTE_VERSION" ]; then
+            if [ "$LOCAL_VERSION" != "$REMOTE_VERSION" ]; then
+                echo "   Status: ⬆️  Update available"
+                echo "     Run: devenv pull $source_name"
+            else
+                log_success "Up to date"
+            fi
+        elif [ -z "$LOCAL_VERSION" ]; then
+            log_warning "Cannot determine local version"
         else
-            log_warning "Cannot find commit $REMOTE_COMMIT in remote repo"
-            cd "$PROJECT_ROOT"
-            rm -rf "$TEMP_DIR"
-            echo ""
-            continue
-        fi
-
-        # Create restored directory with placeholders
-        mkdir -p "$TEMP_DIR/restored"
-
-        # Copy local files and restore placeholders
-        cd "$PROJECT_ROOT"
-        if [ -d "$PROJECT_ROOT/$TARGET" ]; then
-            # Copy entire directory structure first
-            cp -r "$PROJECT_ROOT/$TARGET/"* "$TEMP_DIR/restored/" 2>/dev/null || true
-
-            # Restore placeholders using our script
-            "$SCRIPT_DIR/restore-placeholders.sh" "$TEMP_DIR/restored" "$TEMP_DIR/restored" "$source_name" 2>/dev/null || true
-        fi
-
-        # Compare restored local files (with placeholders) with remote (also with placeholders)
-        LOCAL_CHANGES=$(diff -r -q "$TEMP_DIR/restored" "$TEMP_DIR/remote" 2>/dev/null | grep -v "^Only in $TEMP_DIR/remote" | wc -l || echo "0")
-
-        if [ "$LOCAL_CHANGES" -gt 0 ]; then
-            echo "   Status: 📝 Local modifications detected (comparing with placeholders restored)"
-            diff -r -q "$TEMP_DIR/restored" "$TEMP_DIR/remote" 2>/dev/null | grep -v "^Only in $TEMP_DIR/remote" | sed 's|'"$TEMP_DIR/restored"'|local|g' | sed 's|'"$TEMP_DIR/remote"'|remote|g' | sed 's/^/     /' || true
-        else
-            log_success "No local changes"
-        fi
-
-        # Check for upstream changes
-        cd "$TEMP_DIR/remote"
-        git checkout -q "$BRANCH" 2>/dev/null
-        REMOTE_HEAD=$(git rev-parse HEAD)
-        REMOTE_COMMIT_FULL=$(git rev-parse "$REMOTE_COMMIT" 2>/dev/null || echo "$REMOTE_COMMIT")
-
-        if [ "$REMOTE_HEAD" != "$REMOTE_COMMIT_FULL" ]; then
-            echo "   Status: ⬆️  Upstream changes available"
-            echo "     Local:  $REMOTE_COMMIT_FULL"
-            echo "     Remote: $REMOTE_HEAD"
-            echo "     Run: devenv pull $source_name"
+            log_warning "Cannot determine remote version"
         fi
 
         cd "$PROJECT_ROOT"
@@ -234,21 +191,40 @@ cmd_self_update() {
 
     log_info "Pulling from $REPO (branch: $BRANCH)..."
 
-    # Use git subtree pull to update scripts
-    if git subtree pull --prefix .devenv/scripts \
-        "git@github.com:$REPO.git" "$BRANCH" --squash; then
+    # Create temp directory for cloning
+    TEMP_DIR=$(mktemp -d)
+    trap "rm -rf $TEMP_DIR" EXIT
+
+    # Clone the repo to temp directory (shallow clone for speed)
+    if git clone --depth 1 --branch "$BRANCH" --single-branch \
+        "git@github.com:$REPO.git" "$TEMP_DIR/scripts" 2>&1 | \
+        grep -v "^Cloning into" || true; then
+
+        # Remove .git directory to avoid git tracking
+        rm -rf "$TEMP_DIR/scripts/.git"
+
+        # Remove existing scripts directory
+        rm -rf "$DEVENV_DIR/scripts"
+
+        # Move scripts to target location
+        mv "$TEMP_DIR/scripts" "$DEVENV_DIR/scripts"
+
+        # Clean up temp directory
+        rm -rf "$TEMP_DIR"
+
         echo ""
         log_success "DevEnv scripts updated successfully!"
         echo ""
         log_warning "If you have any active shells or sessions, please restart them to use the updated scripts."
     else
+        rm -rf "$TEMP_DIR"
         echo ""
         log_error "Failed to update DevEnv scripts"
         echo ""
         echo "Common issues:"
         echo "  - Check your SSH keys are configured for GitHub"
         echo "  - Verify the repository exists: $REPO"
-        echo "  - Try running manually: git subtree pull --prefix .devenv/scripts git@github.com:$REPO.git $BRANCH --squash"
+        echo "  - Check network connectivity"
         exit 1
     fi
 }

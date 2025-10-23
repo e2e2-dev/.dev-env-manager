@@ -87,19 +87,19 @@ my-project/
 ├── .devenv/
 │   ├── config.yaml          # ← Project config (PROJECT_NAME, WORKSPACE_PATH)
 │   ├── config.yaml.example  # ← Optional: Template for team (can be tracked)
-│   ├── devenv              # ← CLI tool (symlink to scripts/devenv)
-│   └── scripts/            # ← Synced via git subtree from .dev-env-manager
+│   ├── devenv              # ← CLI tool (symlink to scripts/devenv, gitignored)
+│   └── scripts/            # ← Downloaded from .dev-env-manager (gitignored)
 │
 ├── .env.local              # ← Optional API keys (gitignored, all commented by default)
 │
-├── .devcontainer/          # ← Cloned from .dev-env-container, vars substituted
-├── .claude/                # ← Cloned from .dev-env-claude, vars substituted
-└── .continue/              # ← Cloned from .dev-env-continue, vars substituted
+├── .devcontainer/          # ← Cloned from .dev-env-container, vars substituted (gitignored)
+├── .claude/                # ← Cloned from .dev-env-claude, vars substituted (gitignored)
+└── .continue/              # ← Cloned from .dev-env-continue, vars substituted (gitignored)
 ```
 
 **Key Benefits:**
 - ✅ Consistent dev environment across all projects
-- ✅ Scripts managed via git subtree (version tracked, easy updates)
+- ✅ Scripts downloaded fresh (not tracked in git, like `node_modules`)
 - ✅ Configurations synced via direct clone (no git history mixing)
 - ✅ Optional secrets management with commented templates
 - ✅ One-command updates when configs improve
@@ -112,13 +112,11 @@ my-project/
 ### Update Scripts
 
 ```bash
-# Use built-in command (recommended)
+# Use built-in command
 ./.devenv/devenv self-update
-
-# Or manually via git subtree
-git subtree pull --prefix .devenv/scripts \
-  git@github.com:e2e2-dev/.dev-env-manager.git main --squash
 ```
+
+This downloads a fresh copy of scripts from the central repository.
 
 ### Add Custom Variables
 
@@ -160,7 +158,8 @@ vim .claude/CLAUDE.md
 | `yq: command not found` | Installer auto-installs it. If failed: `wget -qO ~/.local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && chmod +x ~/.local/bin/yq` |
 | Wrong workspace path | Edit `.devenv/config.yaml`, then `./.devenv/devenv pull all` |
 | Permission denied | Check SSH: `ssh -T git@github.com` |
-| Scripts out of date | `./.devenv/devenv self-update` or `git subtree pull --prefix .devenv/scripts git@github.com:e2e2-dev/.dev-env-manager.git main --squash` |
+| Scripts out of date | `./.devenv/devenv self-update` - downloads fresh copy |
+| Scripts missing/corrupted | `rm -rf .devenv/scripts && ./.devenv/devenv self-update` |
 | Configs not syncing | Run `./.devenv/devenv pull all` - configs are cloned fresh each time |
 
 ---
@@ -171,7 +170,7 @@ See sections below for in-depth explanations:
 - [How It Works](#how-it-works) - Architecture and design
 - [Installation Details](#installation-details) - What the installer does
 - [Configuration Reference](#configuration-reference) - All config options
-- [Git Subtree Internals](#git-subtree-internals) - How syncing works
+- [Sync Internals](#sync-internals) - How syncing works
 - [Variable Substitution](#variable-substitution) - Template system
 - [Contributing Back](#contributing-back) - Workflow for improvements
 - [Advanced Usage](#advanced-usage) - Power user features
@@ -192,10 +191,12 @@ See sections below for in-depth explanations:
 │  - install.sh (bootstrap installer via curl)               │
 │  - scripts/ (devenv CLI, sync-pull, sync-push, etc.)       │
 │  - templates/ (config.yaml, .env.local)                    │
+│  - VERSION (version tracking)                               │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
                             ↓
-                 (git subtree to .devenv/scripts/)
+              (shallow clone to .devenv/scripts/)
+              (NOT tracked in your project git)
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
 │ Tier 2: Project Layer (.devenv/)                           │
@@ -203,7 +204,7 @@ See sections below for in-depth explanations:
 │  In your project: /path/to/my-project/.devenv/             │
 │  - config.yaml (PROJECT_NAME, WORKSPACE_PATH, secrets)      │
 │  - config.yaml.example (optional team template)             │
-│  - scripts/ (synced via git subtree from manager)           │
+│  - scripts/ (downloaded fresh, gitignored like node_modules)│
 │  - devenv (symlink to scripts/devenv)                       │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
@@ -224,22 +225,27 @@ See sections below for in-depth explanations:
 ### Why This Architecture?
 
 **Separation of Concerns:**
-1. **Manager Layer** - Generic installer and scripts (one repo, git subtree)
+1. **Manager Layer** - Generic installer and scripts (one repo, downloaded fresh)
 2. **Project Layer** - Your project-specific variables (your repo, minimal config)
 3. **Configuration Layer** - Reusable configs (three central repos, direct clone)
 
 **Benefits:**
-- ✅ Scripts version-tracked via git subtree (know which version you have)
+- ✅ Scripts downloaded fresh and gitignored (simple, no git conflicts)
+- ✅ VERSION file tracks what version you have (simple version management)
 - ✅ Configurations pulled fresh each time (no git history mixing)
 - ✅ Configurations are project-agnostic (variable substitution)
 - ✅ Each project only stores minimal configuration
 - ✅ Improvements propagate to all projects
 - ✅ Simple to understand and debug
 
-**Why Two Different Sync Methods?**
+**Why Everything Uses Direct Clone Now:**
 
-- **Scripts** (git subtree): Need version tracking, rarely change, no variables
-- **Configurations** (direct clone): Change frequently, need variable substitution, don't need history in your project
+Both scripts and configurations use the same simple approach:
+- Downloaded via shallow git clone to temp directory
+- .git removed to avoid tracking conflicts
+- Copied/moved to target location
+- Gitignored to keep project git clean
+- Simple, predictable, no subtree complexity
 
 ---
 
@@ -265,26 +271,32 @@ git rev-parse --git-dir
 mkdir -p .devenv
 ```
 
-#### 3. Setup Scripts via Git Subtree
+#### 3. Download Scripts via Shallow Clone
 
-**For new installation:**
 ```bash
-git subtree add --prefix .devenv/scripts \
-  git@github.com:e2e2-dev/.dev-env-manager.git main --squash \
-  -m "chore: add devenv scripts from central repo"
-```
+# Create temp directory
+TEMP_DIR=$(mktemp -d)
 
-**For existing installation:**
-```bash
-git subtree pull --prefix .devenv/scripts \
-  git@github.com:e2e2-dev/.dev-env-manager.git main --squash \
-  -m "chore: update devenv scripts from central repo"
+# Clone the repo (depth=1 for speed)
+git clone --depth 1 --branch main --single-branch \
+  git@github.com:e2e2-dev/.dev-env-manager.git "$TEMP_DIR/scripts"
+
+# Remove .git to avoid tracking
+rm -rf "$TEMP_DIR/scripts/.git"
+
+# Move to target location
+rm -rf .devenv/scripts  # Remove old if exists
+mv "$TEMP_DIR/scripts" .devenv/scripts
+
+# Cleanup
+rm -rf "$TEMP_DIR"
 ```
 
 **What this does:**
-- Adds all files from `.dev-env-manager/scripts/` to your `.devenv/scripts/`
-- Maintains git history linkage for future pulls
-- Uses `--squash` to keep your history clean
+- Downloads scripts from central `.dev-env-manager` repo
+- Removes `.git` directory so files aren't tracked
+- Places scripts in `.devenv/scripts/` (gitignored)
+- VERSION file tracks which version you have
 
 #### 4. Create Symlink
 ```bash
@@ -338,27 +350,26 @@ curl -sSL https://raw.githubusercontent.com/e2e2-dev/.dev-env-manager/main/templ
 
 Adds these patterns:
 ```gitignore
-# DevEnv scripts (synced via git subtree)
-.devenv/scripts/
+# DevEnv scripts (downloaded fresh, not tracked)
+.devenv/scripts/     # Downloaded from central repo, not tracked in project
+.devenv/devenv       # Symlink to scripts/devenv
+.devenv/.env         # Generated from config.yaml
 
-# Configurations (synced from central repos)
+# Configurations (cloned from central repos)
 .devcontainer/
 .claude/
 .continue/
 
 # Secrets (NEVER commit!)
 .env.local
-
-# Keep local configuration
-!.devenv/config.yaml
-!.devenv/devenv
 ```
 
 **Why these patterns?**
-- `.devenv/scripts/` managed by git subtree (not project git)
-- Configuration directories synced from central repos
+- `.devenv/scripts/` downloaded fresh (gitignored, like `node_modules`)
+- Configuration directories cloned from central repos (gitignored)
 - `.env.local` contains secrets (never commit!)
-- Only `config.yaml` and `devenv` symlink tracked in project repo
+- `.devenv/config.yaml` can be tracked or gitignored (your choice)
+- `.devenv/config.yaml.example` is tracked as template
 
 #### 8. Install yq
 
@@ -551,84 +562,81 @@ database_port: "5432"              # Not uppercase
 
 ---
 
-## Synchronization Internals
+## Sync Internals
 
-The DevEnv Manager uses two different synchronization strategies:
+The DevEnv Manager uses a **uniform clone-based synchronization** strategy for everything - both scripts and configurations.
 
-### 1. Scripts Sync (Git Subtree)
+### Why Clone-Based (Not Git Subtree)?
 
-**Only `.devenv/scripts/` uses git subtree** for version tracking and bidirectional sync.
+**Git subtree was causing problems:**
+- ❌ Deleting `.devenv/scripts/` showed unstaged files, blocking operations
+- ❌ Complex merge conflicts with subtree history
+- ❌ Commits cluttered with subtree metadata
+- ❌ Different behaviors between scripts and configs
+- ❌ Hard to understand and debug
 
-#### Initial Add
+**New approach benefits:**
+- ✅ **Simple and consistent** - Same method for everything
+- ✅ **No git conflicts** - Downloaded files are gitignored
+- ✅ **Easy recovery** - Delete and re-download anytime
+- ✅ **Clean project history** - No tracking of downloaded files
+- ✅ **Like node_modules** - Everyone understands this pattern
+
+### 1. Scripts Sync (Shallow Clone)
+
+`.devenv/scripts/` are downloaded fresh and gitignored (not tracked in your project).
+
+#### Initial Installation
 
 ```bash
-git subtree add --prefix .devenv/scripts \
-  git@github.com:e2e2-dev/.dev-env-manager.git main --squash
+# Via installer
+curl -sSL https://raw.githubusercontent.com/e2e2-dev/.dev-env-manager/main/install.sh | bash
 ```
 
 **What happens:**
-1. Git fetches the remote repository
-2. Creates a merge commit with all files from `main` branch
-3. Places files in `.devenv/scripts/` directory
-4. Uses `--squash` to create single commit (not full history)
-5. Stores subtree metadata in commit message
+1. Creates temp directory
+2. Shallow clones `.dev-env-manager` repo (depth=1, fast)
+3. Removes `.git` directory to avoid tracking
+4. Moves scripts to `.devenv/scripts/`
+5. Creates VERSION file for version tracking
+6. Gitignores `.devenv/scripts/` directory
 
-**Commit message includes:**
-```
-git-subtree-dir: .devenv/scripts
-git-subtree-split: abc123... (commit hash from source)
-```
-
-#### Pulling Script Updates
+#### Updating Scripts
 
 ```bash
-# Via devenv command (recommended)
+# Via devenv command
 ./.devenv/devenv self-update
-
-# Or manually
-git subtree pull --prefix .devenv/scripts \
-  git@github.com:e2e2-dev/.dev-env-manager.git main --squash
 ```
 
 **What happens:**
-1. Fetches latest changes from remote
-2. Identifies last sync point from previous subtree metadata
-3. Merges changes into your `.devenv/scripts/`
-4. Creates merge commit with updated metadata
+1. Reads source repo from `config.yaml`
+2. Shallow clones latest version to temp directory
+3. Removes `.git` directory
+4. Deletes old `.devenv/scripts/`
+5. Moves new scripts into place
+6. Updates VERSION file
+
+**Version tracking:** Compare local `VERSION` file with remote to check for updates.
 
 #### Pushing Script Improvements
 
 ```bash
 # Via devenv command
 ./.devenv/devenv push devenv-scripts
-
-# Or manually
-git subtree push --prefix .devenv/scripts \
-  git@github.com:e2e2-dev/.dev-env-manager.git feature/my-improvement
 ```
 
 **What happens:**
-1. Extracts commits that modified `.devenv/scripts/`
-2. Creates temporary branch with just those changes
-3. Pushes to specified branch in remote repo
-4. You then create PR in central repo
+1. Checks for VERSION file (ensures proper sync)
+2. Clones central repo to temp directory
+3. Restores placeholders in your modified files
+4. Copies your changes to cloned repo
+5. Creates feature branch with timestamp
+6. Commits and pushes to remote
+7. Shows `gh pr create` command
 
-### 2. Configuration Sync (Direct Clone & Copy)
+### 2. Configuration Sync (Same Approach)
 
-**Configurations (`.devcontainer/`, `.claude/`, `.continue/`) use direct cloning** - NOT git subtree.
-
-#### Why Not Git Subtree for Configs?
-
-**Reasons for direct clone:**
-- ✅ **No git history mixing** - Your project history stays clean
-- ✅ **Simpler gitignore** - Just ignore the directories
-- ✅ **Faster syncing** - Shallow clone is quick
-- ✅ **No conflicts** - Fresh copy each time
-- ✅ **Variable substitution** - Files are modified after copying
-
-**Downsides (acceptable trade-offs):**
-- ⚠️ No git tracking of config changes in your project
-- ⚠️ Must use `devenv push` to contribute back (can't use `git subtree push`)
+**Configurations (`.devcontainer/`, `.claude/`, `.continue/`) use the same clone-based approach.**
 
 #### How Configuration Pull Works
 
@@ -691,25 +699,21 @@ git push origin feature/update-from-my-project-20251023-120000
 echo "gh pr create --repo e2e2-dev/.dev-env-claude ..."
 ```
 
-### Why Git Subtree for Scripts?
+### Why Clone-Based for Everything?
 
-| Feature | Git Subtree | Direct Clone |
-|---------|-------------|--------------|
+| Feature | Old (Git Subtree) | New (Clone-Based) |
+|---------|-------------------|-------------------|
 | **Simplicity** | ⚠️ More complex | ✅ Very simple |
-| **Cloning** | ✅ Files included | ❌ Need to pull after clone |
-| **Visibility** | ✅ Files visible | ✅ Files visible |
-| **History Tracking** | ✅ Tracked in git | ❌ Not tracked |
-| **Bidirectional** | ✅ Push/pull easily | ⚠️ Custom push logic |
-| **Version Control** | ✅ In your repo | ❌ Gitignored |
+| **Recovery** | ⚠️ Complex (subtree conflicts) | ✅ Just delete and re-download |
+| **Git Conflicts** | ❌ Subtree merge conflicts | ✅ No conflicts (gitignored) |
+| **Consistency** | ⚠️ Different methods | ✅ Same method everywhere |
+| **Version Tracking** | ✅ Git commits | ✅ VERSION file |
+| **Understanding** | ⚠️ Subtree knowledge needed | ✅ Like node_modules |
 
-**We use subtree for scripts because:**
-- Scripts need version tracking (know which version you have)
-- Scripts rarely change per-project (no variable substitution)
-- Important to track which script version introduced issues
-- Developers may improve scripts (bidirectional sync)
-
-**We use direct clone for configurations because:**
-- Configurations change frequently (new features, improvements)
+**Benefits of uniform clone-based approach:**
+- **Scripts and configs work the same way** - easier to understand
+- **VERSION file tracks versions** - simple text file comparison
+- **No git tracking** - clean project history
 - Need variable substitution after copying
 - Don't want config history in your project
 - Simpler to reason about (just files in directories)
@@ -1216,25 +1220,23 @@ bash -x ./.devenv/devenv pull all
 
 ### Version Pinning
 
-Pin to specific commits instead of branches:
+Pin to specific commits or tags instead of branches:
 
 ```yaml
 sources:
   claude:
     repo: e2e2-dev/.dev-env-claude
-    branch: main
-    commit: abc123def456  # Pin to specific commit
+    branch: v1.2.0  # Can use tag or commit hash
     target: .claude
 ```
 
-Modify sync-pull.sh to use commit hash:
+The sync-pull.sh already supports this via the `branch` parameter:
 ```bash
-if [ -n "$COMMIT" ]; then
-    git subtree pull --prefix "$TARGET" "$REPO_URL" "$COMMIT" --squash
-else
-    git subtree pull --prefix "$TARGET" "$REPO_URL" "$BRANCH" --squash
-fi
+git clone --depth 1 --branch "$BRANCH" --single-branch \
+  "git@github.com:$REPO.git" "$TEMP_DIR/$source_name"
 ```
+
+**Note**: `--branch` works with branches, tags, and commit hashes in git clone.
 
 ---
 
@@ -1266,12 +1268,28 @@ fi
 
 ## Changelog
 
+### 2025-10-23 - v2.0.0
+
+**Major Changes:**
+- 🔄 **Removed git subtree dependency** - Now uses uniform clone-based sync
+- ✅ Scripts downloaded fresh (gitignored, like `node_modules`)
+- ✅ VERSION file for simple version tracking
+- ✅ Simpler recovery - just delete and re-download
+- ✅ No more git subtree conflicts
+- ✅ Cleaner project git history
+
+**Why the change:**
+- Git subtree was causing complexity and conflicts
+- Deleting `.devenv/scripts/` would show unstaged files
+- Different sync methods for scripts vs configs was confusing
+- New approach is simpler and more consistent
+
 ### 2025-10-16 - v1.0.0
 
 **Added:**
 - ✅ Centralized `.dev-env-manager` repository
 - ✅ One-command installer via curl
-- ✅ Git subtree-based script synchronization
+- ✅ Clone-based synchronization
 - ✅ Minimal `config.yaml` template (2 required variables)
 - ✅ Optional secrets management with `.env.local` template
 - ✅ Automatic yq installation
@@ -1285,7 +1303,7 @@ fi
 - ✅ All secrets commented out by default (opt-in pattern)
 
 **Removed:**
-- ❌ Manual script downloads (now via git subtree)
+- ❌ Manual script downloads (now via clone)
 - ❌ Complex config.yaml (now minimal template)
 - ❌ Project-specific documentation from central repos
 - ❌ Hardcoded API keys (now in gitignored .env.local)

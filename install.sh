@@ -30,14 +30,22 @@ fi
 PROJECT_ROOT=$(git rev-parse --show-toplevel)
 log_info "Installing in: $PROJECT_ROOT"
 
-# Check for uncommitted changes
+# Check for uncommitted changes (excluding .devenv which is gitignored)
 if ! git diff --quiet || ! git diff --cached --quiet; then
-    log_error "Working tree has uncommitted changes."
-    log_info "Please commit or stash your changes first:"
-    echo "   git status"
-    echo "   git add ."
-    echo "   git commit -m 'your message'"
-    exit 1
+    # Check if changes are only in .devenv (which should be gitignored anyway)
+    CHANGED_FILES=$(git diff --name-only 2>/dev/null)
+    NON_DEVENV_CHANGES=$(echo "$CHANGED_FILES" | grep -v "^\.devenv/" || true)
+
+    if [ -n "$NON_DEVENV_CHANGES" ]; then
+        log_error "Working tree has uncommitted changes."
+        log_info "Please commit or stash your changes first:"
+        echo "   git status"
+        echo "   git add ."
+        echo "   git commit -m 'your message'"
+        exit 1
+    else
+        log_info "Detected changes in .devenv - these will be updated"
+    fi
 fi
 
 # Check if .devenv already exists
@@ -55,19 +63,34 @@ fi
 log_info "Creating .devenv directory..."
 mkdir -p "$PROJECT_ROOT/.devenv"
 
-# Add .devenv/scripts via git subtree
-log_info "Setting up DevEnv scripts via git subtree..."
-if [ -d "$PROJECT_ROOT/.devenv/scripts" ]; then
-    log_info "Updating existing scripts..."
-    git subtree pull --prefix .devenv/scripts \
-        git@github.com:e2e2-dev/.dev-env-manager.git main --squash \
-        -m "chore: update devenv scripts from central repo"
-else
-    log_info "Adding scripts for the first time..."
-    git subtree add --prefix .devenv/scripts \
-        git@github.com:e2e2-dev/.dev-env-manager.git main --squash \
-        -m "chore: add devenv scripts from central repo"
+# Download .devenv/scripts via shallow clone (not tracked in git)
+log_info "Installing DevEnv scripts from central repository..."
+TEMP_DIR=$(mktemp -d)
+trap "rm -rf $TEMP_DIR" EXIT
+
+# Clone the repo to temp directory (shallow clone for speed)
+log_info "Cloning scripts repository..."
+if ! git clone --depth 1 --branch main --single-branch \
+    git@github.com:e2e2-dev/.dev-env-manager.git "$TEMP_DIR/scripts" 2>&1 | \
+    grep -v "^Cloning into" || true; then
+    log_error "Failed to clone repository"
+    rm -rf "$TEMP_DIR"
+    exit 1
 fi
+
+# Remove .git directory to avoid git tracking
+rm -rf "$TEMP_DIR/scripts/.git"
+
+# Remove existing scripts directory
+rm -rf "$PROJECT_ROOT/.devenv/scripts"
+
+# Move scripts to target location
+mv "$TEMP_DIR/scripts" "$PROJECT_ROOT/.devenv/scripts"
+
+# Clean up temp directory
+rm -rf "$TEMP_DIR"
+
+log_success "Scripts installed successfully"
 
 # Create symlink to devenv CLI
 log_info "Creating devenv CLI symlink..."
@@ -167,7 +190,9 @@ coverage.xml
 .devcontainer/
 .claude/
 .continue/
-.devenv/
+.devenv/scripts/     # Downloaded from central repo, not tracked in project
+.devenv/devenv       # Symlink to scripts/devenv
+.devenv/.env         # Generated from config.yaml
 
 # =============================================================================
 # Environment variables & secrets
@@ -233,9 +258,11 @@ echo ""
 echo "2. Pull centralized configurations:"
 echo -e "   ${BLUE}./.devenv/devenv pull all${NC}"
 echo ""
-echo "3. Commit the changes:"
-echo -e "   ${BLUE}git add .devenv/config.yaml.example .devenv/devenv .gitignore${NC}"
+echo "3. Review and commit configuration files (if desired):"
+echo -e "   ${BLUE}git add .devenv/config.yaml.example .gitignore${NC}"
 echo -e "   ${BLUE}git commit -m 'feat: add devenv configuration manager'${NC}"
+echo ""
+echo -e "${YELLOW}Note:${NC} .devenv/scripts/ is NOT tracked in git (downloaded fresh on install)"
 echo ""
 echo -e "${YELLOW}Note:${NC} .devenv/config.yaml is gitignored (local only)"
 echo "      Only .devenv/config.yaml.example is tracked"
