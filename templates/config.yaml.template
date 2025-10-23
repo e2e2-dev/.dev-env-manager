@@ -45,6 +45,7 @@ variables:
 
   # Optional: Custom paths (uncomment and configure if needed)
   # OBSIDIAN_VAULT_PATH: /data/vaults/my-vault
+  # PRACTICES_PATH: /data/vaults/engineering-practices
   # KNOWLEDGE_BASES_PATH: /data/knowledge-bases
 
 # ============================================================================
@@ -80,6 +81,7 @@ substitutions:
       - PROJECT_NAME
       - WORKSPACE_PATH
       - OBSIDIAN_VAULT_PATH
+      - PRACTICES_PATH
       - KNOWLEDGE_BASES_PATH
 
   - files:
