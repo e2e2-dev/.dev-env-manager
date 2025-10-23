@@ -40,18 +40,27 @@ for source_name in $(yq eval '.sources | keys | .[]' "$CONFIG_FILE"); do
 
     cd "$PROJECT_ROOT"
 
-    # Check if subtree exists in history AND on disk
-    SUBTREE_IN_HISTORY=$(git log --all --grep="git-subtree-dir: $TARGET_DIR" --pretty=format:"%H" | head -1)
+    # Create temp directory for cloning
+    TEMP_DIR=$(mktemp -d)
+    trap "rm -rf $TEMP_DIR" EXIT
 
-    if [ -n "$SUBTREE_IN_HISTORY" ] && [ -d "$TARGET_DIR" ]; then
-        # Update existing subtree (exists in history AND on disk)
-        git subtree pull --prefix "$TARGET_DIR" \
-            "git@github.com:$REPO.git" "$BRANCH" --squash
-    else
-        # Add new subtree (either no history, or directory was removed)
-        git subtree add --prefix "$TARGET_DIR" \
-            "git@github.com:$REPO.git" "$BRANCH" --squash
-    fi
+    # Clone the repo to temp directory (shallow clone for speed)
+    git clone --depth 1 --branch "$BRANCH" --single-branch \
+        "git@github.com:$REPO.git" "$TEMP_DIR/$source_name" 2>&1 | \
+        grep -v "^Cloning into" || true
+
+    # Remove .git directory from cloned repo to avoid git tracking
+    rm -rf "$TEMP_DIR/$source_name/.git"
+
+    # Remove target directory if it exists
+    rm -rf "$TARGET_DIR"
+
+    # Copy contents to target directory
+    mkdir -p "$(dirname "$TARGET_DIR")"
+    mv "$TEMP_DIR/$source_name" "$TARGET_DIR"
+
+    # Clean up temp directory
+    rm -rf "$TEMP_DIR"
 
     log_success "$source_name updated"
     echo ""
