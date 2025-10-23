@@ -196,11 +196,8 @@ cmd_self_update() {
     trap "rm -rf $TEMP_DIR" EXIT
 
     # Clone the repo to temp directory (shallow clone for speed)
-    git clone --depth 1 --branch "$BRANCH" --single-branch \
-        "git@github.com:$REPO.git" "$TEMP_DIR/scripts" 2>&1 | \
-        grep -v "^Cloning into" || true
-
-    if [ ! -d "$TEMP_DIR/scripts" ]; then
+    if ! git clone --depth 1 --branch "$BRANCH" --single-branch \
+        "git@github.com:$REPO.git" "$TEMP_DIR/scripts" >/dev/null 2>&1; then
         rm -rf "$TEMP_DIR"
         echo ""
         log_error "Failed to update DevEnv scripts"

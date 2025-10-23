@@ -70,11 +70,8 @@ trap "rm -rf $TEMP_DIR" EXIT
 
 # Clone the repo to temp directory (shallow clone for speed)
 log_info "Cloning scripts repository..."
-git clone --depth 1 --branch main --single-branch \
-    git@github.com:e2e2-dev/.dev-env-manager.git "$TEMP_DIR/scripts" 2>&1 | \
-    grep -v "^Cloning into" || true
-
-if [ ! -d "$TEMP_DIR/scripts" ]; then
+if ! git clone --depth 1 --branch main --single-branch \
+    git@github.com:e2e2-dev/.dev-env-manager.git "$TEMP_DIR/scripts" >/dev/null 2>&1; then
     log_error "Failed to clone repository"
     rm -rf "$TEMP_DIR"
     exit 1
