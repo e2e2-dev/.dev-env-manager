@@ -196,27 +196,11 @@ cmd_self_update() {
     trap "rm -rf $TEMP_DIR" EXIT
 
     # Clone the repo to temp directory (shallow clone for speed)
-    if git clone --depth 1 --branch "$BRANCH" --single-branch \
+    git clone --depth 1 --branch "$BRANCH" --single-branch \
         "git@github.com:$REPO.git" "$TEMP_DIR/scripts" 2>&1 | \
-        grep -v "^Cloning into" || true; then
+        grep -v "^Cloning into" || true
 
-        # Remove .git directory to avoid git tracking
-        rm -rf "$TEMP_DIR/scripts/.git"
-
-        # Remove existing scripts directory
-        rm -rf "$DEVENV_DIR/scripts"
-
-        # Move scripts to target location
-        mv "$TEMP_DIR/scripts" "$DEVENV_DIR/scripts"
-
-        # Clean up temp directory
-        rm -rf "$TEMP_DIR"
-
-        echo ""
-        log_success "DevEnv scripts updated successfully!"
-        echo ""
-        log_warning "If you have any active shells or sessions, please restart them to use the updated scripts."
-    else
+    if [ ! -d "$TEMP_DIR/scripts" ]; then
         rm -rf "$TEMP_DIR"
         echo ""
         log_error "Failed to update DevEnv scripts"
@@ -227,6 +211,23 @@ cmd_self_update() {
         echo "  - Check network connectivity"
         exit 1
     fi
+
+    # Remove .git directory to avoid git tracking
+    rm -rf "$TEMP_DIR/scripts/.git"
+
+    # Remove existing scripts directory
+    rm -rf "$DEVENV_DIR/scripts"
+
+    # Move scripts to target location
+    mv "$TEMP_DIR/scripts" "$DEVENV_DIR/scripts"
+
+    # Clean up temp directory
+    rm -rf "$TEMP_DIR"
+
+    echo ""
+    log_success "DevEnv scripts updated successfully!"
+    echo ""
+    log_warning "If you have any active shells or sessions, please restart them to use the updated scripts."
 }
 
 # Command: help
